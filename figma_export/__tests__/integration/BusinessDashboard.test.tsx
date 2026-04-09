@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import BusinessDashboard from '@/app/pages/BusinessDashboard';
 import * as businessHooks from '@/hooks/useBusinessData';
@@ -26,92 +26,126 @@ function buildCacheSyncMock(overrides: Partial<ReturnType<typeof cacheSyncHooks.
   };
 }
 
-function buildHourlyAverages() {
-  return Array.from({ length: 24 }, (_, hour) => ({
-    hour,
-    avgEnergy: hour >= 8 && hour < 18 ? 18 : 12,
-    avgOccupancy: hour === 8 ? 82 : 58,
-    tariff: hour >= 22 || hour < 6 ? 0.5 : hour >= 18 && hour < 21 ? 0.85 : 0.65,
-  }));
+function buildTimeline() {
+  return [
+    {
+      key: '2026-03-30',
+      label: '30/03',
+      timestamp: new Date('2026-03-30T12:00:00.000Z'),
+      totalKwh: 240,
+      processedKg: 100,
+      grossRevenue: 1600,
+      energyCost: 156,
+      payrollCost: 513.33,
+      rentCost: 280,
+      maintenanceCost: 105,
+      lostMerchandiseCost: 55,
+      totalCosts: 1109.33,
+      operatingProfit: 490.67,
+      margin: 30.67,
+      averageTemperature: -18,
+      averageOccupancy: 65,
+    },
+    {
+      key: '2026-03-31',
+      label: '31/03',
+      timestamp: new Date('2026-03-31T12:00:00.000Z'),
+      totalKwh: 240,
+      processedKg: 100,
+      grossRevenue: 1600,
+      energyCost: 156,
+      payrollCost: 513.33,
+      rentCost: 280,
+      maintenanceCost: 105,
+      lostMerchandiseCost: 55,
+      totalCosts: 1109.33,
+      operatingProfit: 490.67,
+      margin: 30.67,
+      averageTemperature: -17.8,
+      averageOccupancy: 67,
+    },
+  ];
 }
 
 describe('BusinessDashboard integration', () => {
   beforeEach(() => {
     vi.spyOn(cacheSyncHooks, 'useCacheSync').mockReturnValue(buildCacheSyncMock());
     vi.spyOn(businessHooks, 'useBusinessData').mockReturnValue({
-      currentRevenue: 85000,
-      projectedRevenue: 170000,
-      energyCost: 6500,
-      projectedEnergyCost: 13000,
-      margin: 92.35,
-      projectedMargin: 92.35,
-      revenueChange: 5,
-      costChange: 2,
+      currentRevenue: 3200,
+      projectedRevenue: 48000,
+      energyCost: 312,
+      projectedEnergyCost: 4680,
+      margin: 30.67,
+      projectedMargin: 30.67,
+      revenueChange: 0,
+      costChange: 0,
+      estimatedProcessedKg: 200,
+      totalCosts: 2218.66,
+      operatingProfit: 981.34,
+      costBreakdown: {
+        energy: 312,
+        payroll: 1026.66,
+        rent: 560,
+        maintenance: 210,
+        lostMerchandise: 110,
+        total: 2218.66,
+      },
+      timeline: buildTimeline(),
+      timelineGranularity: 'day',
+      assumptions: {
+        employeeCount: 4,
+        monthlyPayrollCost: 22000,
+        monthlyRentCost: 12000,
+        monthlyMaintenanceCost: 4500,
+        lossRate: 0.05,
+        merchandiseCostPerKg: 11,
+        kwhPerKgProcessed: 2.4,
+        averageSalePricePerKg: 16,
+      },
       dailyData: [
         {
           date: '2026-03-30',
           label: '30/03',
-          totalKwh: 500,
+          totalKwh: 240,
           averageTemperature: -18,
-          averageOccupancy: 70,
-          energyCost: 325,
-          revenue: 4250,
+          averageOccupancy: 65,
+          energyCost: 156,
+          revenue: 1600,
         },
         {
           date: '2026-03-31',
           label: '31/03',
-          totalKwh: 500,
-          averageTemperature: -18,
-          averageOccupancy: 72,
-          energyCost: 325,
-          revenue: 4250,
+          totalKwh: 240,
+          averageTemperature: -17.8,
+          averageOccupancy: 67,
+          energyCost: 156,
+          revenue: 1600,
         },
       ],
       monthlyComparison: [
         {
-          month: 'fev/26',
-          totalKwh: 9000,
-          energyCost: 5900,
-          revenue: 76000,
-        },
-        {
           month: 'mar/26',
-          totalKwh: 10000,
-          energyCost: 6500,
-          revenue: 85000,
+          totalKwh: 480,
+          energyCost: 312,
+          revenue: 3200,
         },
       ],
-      hourlyAverages: buildHourlyAverages(),
+      hourlyAverages: [],
       cumulativeData: [
         {
           day: 30,
           label: '30',
-          energyAccum: 325,
-          revenueAccum: 4250,
+          energyAccum: 156,
+          revenueAccum: 1600,
         },
         {
           day: 31,
           label: '31',
-          energyAccum: 650,
-          revenueAccum: 8500,
+          energyAccum: 312,
+          revenueAccum: 3200,
         },
       ],
-      periodSeries: [
-        {
-          freezerEnergy: 4,
-          equipmentEnergy: 6,
-          temperature: -18,
-          occupancy: 65,
-          timestamp: new Date('2026-03-30T12:00:00.000Z'),
-        },
-        {
-          freezerEnergy: 5,
-          equipmentEnergy: 7,
-          temperature: -17,
-          occupancy: 72,
-          timestamp: new Date('2026-03-31T12:00:00.000Z'),
-        },
-      ],
+      periodSeries: [],
       referenceDate: new Date('2026-03-31T12:00:00'),
       isLoading: false,
       error: null,
@@ -122,26 +156,37 @@ describe('BusinessDashboard integration', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the business KPIs, charts and insights with cached financial data', async () => {
+  it('renders the new business model KPIs, charts and assumptions panel', async () => {
     render(
       <MemoryRouter initialEntries={['/business']}>
         <BusinessDashboard />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Faturamento do Periodo/i)).toBeInTheDocument();
-    expect(screen.getByText(/R\$ 85k/i)).toBeInTheDocument();
-    expect(screen.getByText(/R\$ 170k/i)).toBeInTheDocument();
-    expect(screen.getByText(/Margem Operacional/i)).toBeInTheDocument();
-    expect(screen.getByText(/Custo e receita do periodo/i)).toBeInTheDocument();
-    expect(screen.getByText(/Energia e ocupacao do periodo/i)).toBeInTheDocument();
-    expect(screen.getByText(/Insights Executivos/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Expandir Custo e receita do periodo/i }),
-    ).toBeInTheDocument();
+    expect((await screen.findAllByText(/Faturamento estimado/i)).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Custos totais/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lucro operacional/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Volume processado/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Premissas do modelo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Faturamento x custos x lucro/i)).toBeInTheDocument();
+    expect(screen.getByText(/Composicao dos custos/i)).toBeInTheDocument();
   });
 
-  it('shows loading placeholders while the business indicators are being prepared', () => {
+  it('opens the methodology modal with the fixed assumptions of the model', async () => {
+    render(
+      <MemoryRouter initialEntries={['/business']}>
+        <BusinessDashboard />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ver metodologia/i }));
+
+    expect(await screen.findByText(/Metodologia do modelo de negocios/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/4 funcionarios/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/2.4 kWh para 1 kg processado/i)).toBeInTheDocument();
+  });
+
+  it('shows loading placeholders while the business model is being prepared', () => {
     vi.spyOn(cacheSyncHooks, 'useCacheSync').mockReturnValue(
       buildCacheSyncMock({
         isLoading: true,
@@ -161,6 +206,29 @@ describe('BusinessDashboard integration', () => {
       projectedMargin: 0,
       revenueChange: 0,
       costChange: 0,
+      estimatedProcessedKg: 0,
+      totalCosts: 0,
+      operatingProfit: 0,
+      costBreakdown: {
+        energy: 0,
+        payroll: 0,
+        rent: 0,
+        maintenance: 0,
+        lostMerchandise: 0,
+        total: 0,
+      },
+      timeline: [],
+      timelineGranularity: 'day',
+      assumptions: {
+        employeeCount: 4,
+        monthlyPayrollCost: 22000,
+        monthlyRentCost: 12000,
+        monthlyMaintenanceCost: 4500,
+        lossRate: 0.05,
+        merchandiseCostPerKg: 11,
+        kwhPerKgProcessed: 2.4,
+        averageSalePricePerKg: 16,
+      },
       dailyData: [],
       monthlyComparison: [],
       hourlyAverages: [],
@@ -177,10 +245,8 @@ describe('BusinessDashboard integration', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/Carregando indicadores financeiros/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: /^Indicadores Financeiros$/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Carregando modelo de negocios/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Indicadores do Negocio$/i })).toBeInTheDocument();
   });
 
   it('shows the retry state when no cached business data is available', async () => {
@@ -206,6 +272,29 @@ describe('BusinessDashboard integration', () => {
       projectedMargin: 0,
       revenueChange: 0,
       costChange: 0,
+      estimatedProcessedKg: 0,
+      totalCosts: 0,
+      operatingProfit: 0,
+      costBreakdown: {
+        energy: 0,
+        payroll: 0,
+        rent: 0,
+        maintenance: 0,
+        lostMerchandise: 0,
+        total: 0,
+      },
+      timeline: [],
+      timelineGranularity: 'day',
+      assumptions: {
+        employeeCount: 4,
+        monthlyPayrollCost: 22000,
+        monthlyRentCost: 12000,
+        monthlyMaintenanceCost: 4500,
+        lossRate: 0.05,
+        merchandiseCostPerKg: 11,
+        kwhPerKgProcessed: 2.4,
+        averageSalePricePerKg: 16,
+      },
       dailyData: [],
       monthlyComparison: [],
       hourlyAverages: [],
@@ -213,7 +302,7 @@ describe('BusinessDashboard integration', () => {
       periodSeries: [],
       referenceDate: null,
       isLoading: false,
-      error: 'Os dados financeiros ainda nao estao disponiveis no cache.',
+      error: 'Os dados do modelo de negocios ainda nao estao disponiveis no cache.',
     });
 
     render(
@@ -226,26 +315,5 @@ describe('BusinessDashboard integration', () => {
       await screen.findByRole('heading', { name: /Nao foi possivel montar a tela de negocios/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Atualizar/i })).toBeInTheDocument();
-  });
-
-  it('shows the explicit backup banner when business data is being served from the snapshot', async () => {
-    vi.spyOn(cacheSyncHooks, 'useCacheSync').mockReturnValue(
-      buildCacheSyncMock({
-        isOnline: false,
-        dataSource: 'backup',
-        isUsingBackup: true,
-        sourceMessage: 'API indisponivel; usando dados do backup local.',
-        backupSnapshotTimestamp: new Date('2026-04-09T14:06:48.000Z'),
-      }),
-    );
-
-    render(
-      <MemoryRouter initialEntries={['/business']}>
-        <BusinessDashboard />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText(/Usando backup SQLite/i)).toBeInTheDocument();
-    expect(screen.getByText(/Financeiro pelo backup/i)).toBeInTheDocument();
   });
 });

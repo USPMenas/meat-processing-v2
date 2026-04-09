@@ -1,31 +1,32 @@
-import { FINANCIAL_CONFIG } from '../constants/financial';
+import { BUSINESS_MODEL_ASSUMPTIONS, FINANCIAL_CONFIG } from '../constants/financial';
 import { TARIFFS } from '../constants/tariffs';
-import {
-  calculateEnergyCost,
-  calculateMargin,
-  calculateRevenue,
-  projectMonthly,
-} from './financialTransformer';
+import { calculateEnergyCost, calculateMargin, projectMonthly } from './financialTransformer';
+import { round } from './deterministic';
 import type {
+  BusinessCostBreakdown,
   BusinessData,
+  BusinessModelAssumptions,
+  BusinessTimelineEntry,
+  BusinessTimelineGranularity,
   CumulativeEntry,
   DailyEntry,
   HourlyAvgEntry,
   InsightCard,
   MonthlyEntry,
+  OperationalChartPeriod,
   OperationalData,
 } from '../types';
+
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}
 
 function average(values: number[]): number {
   if (values.length === 0) {
     return 0;
   }
 
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function sum(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0);
+  return sum(values) / values.length;
 }
 
 function formatLocalDateKey(date: Date): string {
@@ -43,6 +44,13 @@ function formatDayLabel(date: Date): string {
   });
 }
 
+function formatHourLabel(date: Date): string {
+  return date.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function formatMonthLabel(date: Date): string {
   return date
     .toLocaleString('pt-BR', {
@@ -53,27 +61,112 @@ function formatMonthLabel(date: Date): string {
     .replace(' de ', '/');
 }
 
-function buildHourlyBreakdown(totalKwh: number, hourlyAverages: HourlyAvgEntry[]): { hour: number; kwh: number }[] {
-  if (hourlyAverages.length === 0) {
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      kwh: totalKwh / 24,
-    }));
+function alignToBucket(date: Date, granularity: BusinessTimelineGranularity): Date {
+  if (granularity === 'hour') {
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      date.getHours(),
+      0,
+      0,
+      0,
+    );
   }
 
-  const weightTotal = sum(hourlyAverages.map((entry) => Math.max(entry.avgEnergy, 0)));
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
 
-  if (weightTotal <= 0) {
-    return hourlyAverages.map((entry) => ({
-      hour: entry.hour,
-      kwh: totalKwh / Math.max(hourlyAverages.length, 1),
-    }));
+function shiftBucket(
+  date: Date,
+  granularity: BusinessTimelineGranularity,
+  amount: number,
+): Date {
+  const shifted = new Date(date);
+
+  if (granularity === 'hour') {
+    shifted.setHours(shifted.getHours() + amount);
+    return shifted;
   }
 
-  return hourlyAverages.map((entry) => ({
-    hour: entry.hour,
-    kwh: (totalKwh * Math.max(entry.avgEnergy, 0)) / weightTotal,
-  }));
+  shifted.setDate(shifted.getDate() + amount);
+  return shifted;
+}
+
+function getTimelineGranularity(period: OperationalChartPeriod): BusinessTimelineGranularity {
+  return period === '24h' ? 'hour' : 'day';
+}
+
+function getBucketCount(period: OperationalChartPeriod): number {
+  return period === '24h' ? 24 : Number.parseInt(period, 10);
+}
+
+function getFallbackStepHours(
+  operationalSeries: OperationalData[],
+  period: OperationalChartPeriod,
+): number {
+  if (operationalSeries.length < 2) {
+    return period === '24h' ? 1 : 24;
+  }
+
+  const timestamps = operationalSeries
+    .map((entry) => entry.timestamp.getTime())
+    .sort((left, right) => left - right);
+  const deltas = timestamps
+    .slice(1)
+    .map((timestamp, index) => timestamp - timestamps[index])
+    .filter((delta) => delta > 0)
+    .sort((left, right) => left - right);
+
+  if (deltas.length === 0) {
+    return period === '24h' ? 1 : 24;
+  }
+
+  const median = deltas[Math.floor(deltas.length / 2)];
+  return median / 3_600_000;
+}
+
+function createTimelineSkeleton(
+  referenceDate: Date,
+  period: OperationalChartPeriod,
+  granularity: BusinessTimelineGranularity,
+): Array<{
+  key: string;
+  label: string;
+  timestamp: Date;
+  totalKwh: number;
+  averageTemperature: number[];
+  averageOccupancy: number[];
+  hourlyBreakdown: Map<number, number>;
+}> {
+  const bucketCount = getBucketCount(period);
+  const endBucket = alignToBucket(referenceDate, granularity);
+  const startBucket = shiftBucket(endBucket, granularity, -(bucketCount - 1));
+
+  return Array.from({ length: bucketCount }, (_, index) => {
+    const timestamp = shiftBucket(startBucket, granularity, index);
+
+    return {
+      key: timestamp.toISOString(),
+      label: granularity === 'hour' ? formatHourLabel(timestamp) : formatDayLabel(timestamp),
+      timestamp,
+      totalKwh: 0,
+      averageTemperature: [],
+      averageOccupancy: [],
+      hourlyBreakdown: new Map<number, number>(),
+    };
+  });
+}
+
+function getBusinessPeriodShare(period: OperationalChartPeriod): number {
+  switch (period) {
+    case '24h':
+      return 1 / FINANCIAL_CONFIG.DAYS_PER_MONTH;
+    case '7d':
+      return 7 / FINANCIAL_CONFIG.DAYS_PER_MONTH;
+    default:
+      return 1;
+  }
 }
 
 export function getTotalConsumptionKwh(
@@ -83,7 +176,7 @@ export function getTotalConsumptionKwh(
     return 0;
   }
 
-  return sum(results.map((entry) => entry.total_kwh));
+  return round(sum(results.map((entry) => entry.total_kwh)));
 }
 
 export function estimateTotalConsumptionKwhFromSeries(
@@ -96,91 +189,193 @@ export function estimateTotalConsumptionKwhFromSeries(
 
   if (operationalSeries.length === 1) {
     const entry = operationalSeries[0];
-    return (entry.freezerEnergy + entry.equipmentEnergy) * defaultStepHours;
+    return round((entry.freezerEnergy + entry.equipmentEnergy) * defaultStepHours);
   }
 
-  return operationalSeries.reduce((total, entry, index) => {
-    const nextEntry = operationalSeries[index + 1];
+  return round(
+    operationalSeries.reduce((total, entry, index) => {
+      const nextEntry = operationalSeries[index + 1];
+      const intervalHours = nextEntry
+        ? (nextEntry.timestamp.getTime() - entry.timestamp.getTime()) / 3_600_000
+        : defaultStepHours;
+
+      return (
+        total +
+        (entry.freezerEnergy + entry.equipmentEnergy) *
+          (intervalHours > 0 ? intervalHours : defaultStepHours)
+      );
+    }, 0),
+  );
+}
+
+export function buildBusinessTimeline(params: {
+  operationalSeries: OperationalData[];
+  period: OperationalChartPeriod;
+  referenceDate: Date | null;
+  assumptions?: BusinessModelAssumptions;
+}): {
+  timeline: BusinessTimelineEntry[];
+  granularity: BusinessTimelineGranularity;
+} {
+  const {
+    operationalSeries,
+    period,
+    referenceDate,
+    assumptions = BUSINESS_MODEL_ASSUMPTIONS,
+  } = params;
+
+  if (operationalSeries.length === 0 || !referenceDate) {
+    return {
+      timeline: [],
+      granularity: getTimelineGranularity(period),
+    };
+  }
+
+  const granularity = getTimelineGranularity(period);
+  const sortedSeries = [...operationalSeries].sort(
+    (left, right) => left.timestamp.getTime() - right.timestamp.getTime(),
+  );
+  const bucketSkeleton = createTimelineSkeleton(referenceDate, period, granularity);
+  const bucketMap = new Map(bucketSkeleton.map((bucket) => [bucket.key, bucket]));
+  const defaultStepHours = getFallbackStepHours(sortedSeries, period);
+  const periodShare = getBusinessPeriodShare(period);
+  const fixedPayroll = assumptions.monthlyPayrollCost * periodShare;
+  const fixedRent = assumptions.monthlyRentCost * periodShare;
+  const fixedMaintenance = assumptions.monthlyMaintenanceCost * periodShare;
+  const perBucketPayroll = fixedPayroll / Math.max(bucketSkeleton.length, 1);
+  const perBucketRent = fixedRent / Math.max(bucketSkeleton.length, 1);
+  const perBucketMaintenance = fixedMaintenance / Math.max(bucketSkeleton.length, 1);
+
+  sortedSeries.forEach((entry, index) => {
+    const nextEntry = sortedSeries[index + 1];
     const intervalHours = nextEntry
       ? (nextEntry.timestamp.getTime() - entry.timestamp.getTime()) / 3_600_000
       : defaultStepHours;
+    const effectiveIntervalHours = intervalHours > 0 ? intervalHours : defaultStepHours;
+    const bucketDate = alignToBucket(entry.timestamp, granularity);
+    const bucket = bucketMap.get(bucketDate.toISOString());
 
-    return (
-      total +
-      (entry.freezerEnergy + entry.equipmentEnergy) *
-        (intervalHours > 0 ? intervalHours : defaultStepHours)
+    if (!bucket) {
+      return;
+    }
+
+    const totalPowerKw = entry.freezerEnergy + entry.equipmentEnergy;
+    const totalKwh = totalPowerKw * effectiveIntervalHours;
+
+    bucket.totalKwh += totalKwh;
+    bucket.averageTemperature.push(entry.temperature);
+    bucket.averageOccupancy.push(entry.occupancy);
+    bucket.hourlyBreakdown.set(
+      entry.timestamp.getHours(),
+      (bucket.hourlyBreakdown.get(entry.timestamp.getHours()) ?? 0) + totalKwh,
     );
-  }, 0);
+  });
+
+  const timeline = bucketSkeleton.map((bucket) => {
+    const totalKwh = round(bucket.totalKwh);
+    const processedKg = round(totalKwh / assumptions.kwhPerKgProcessed);
+    const grossRevenue = round(processedKg * assumptions.averageSalePricePerKg);
+    const energyCost = calculateEnergyCost(
+      totalKwh,
+      Array.from(bucket.hourlyBreakdown.entries()).map(([hour, kwh]) => ({ hour, kwh })),
+      [...TARIFFS],
+    );
+    const lostMerchandiseCost = round(
+      processedKg * assumptions.lossRate * assumptions.merchandiseCostPerKg,
+    );
+    const payrollCost = round(perBucketPayroll);
+    const rentCost = round(perBucketRent);
+    const maintenanceCost = round(perBucketMaintenance);
+    const totalCosts = round(
+      energyCost + payrollCost + rentCost + maintenanceCost + lostMerchandiseCost,
+    );
+    const operatingProfit = round(grossRevenue - totalCosts);
+
+    return {
+      key: bucket.key,
+      label: bucket.label,
+      timestamp: bucket.timestamp,
+      totalKwh,
+      processedKg,
+      grossRevenue,
+      energyCost,
+      payrollCost,
+      rentCost,
+      maintenanceCost,
+      lostMerchandiseCost,
+      totalCosts,
+      operatingProfit,
+      margin: calculateMargin(grossRevenue, totalCosts),
+      averageTemperature: round(average(bucket.averageTemperature)),
+      averageOccupancy: round(average(bucket.averageOccupancy)),
+    };
+  });
+
+  return { timeline, granularity };
 }
 
-export function buildDailyBusinessData(params: {
-  operationalSeries: OperationalData[];
-  totalKwh: number;
-  hourlyAverages: HourlyAvgEntry[];
-  referenceDate: Date | null;
-}): DailyEntry[] {
-  const { operationalSeries, totalKwh, hourlyAverages, referenceDate } = params;
+export function buildDailyBusinessData(
+  timeline: BusinessTimelineEntry[],
+  granularity: BusinessTimelineGranularity,
+): DailyEntry[] {
+  if (timeline.length === 0) {
+    return [];
+  }
+
+  if (granularity === 'day') {
+    return timeline.map((entry) => ({
+      date: formatLocalDateKey(entry.timestamp),
+      label: entry.label,
+      totalKwh: entry.totalKwh,
+      averageTemperature: entry.averageTemperature,
+      averageOccupancy: entry.averageOccupancy,
+      energyCost: entry.energyCost,
+      revenue: entry.grossRevenue,
+    }));
+  }
+
   const grouped = new Map<
     string,
     {
-      date: Date;
-      energySamples: number[];
-      temperatures: number[];
-      occupancies: number[];
+      timestamp: Date;
+      totalKwh: number;
+      averageTemperature: number[];
+      averageOccupancy: number[];
+      energyCost: number;
+      revenue: number;
     }
   >();
 
-  operationalSeries.forEach((entry) => {
+  timeline.forEach((entry) => {
     const key = formatLocalDateKey(entry.timestamp);
     const current = grouped.get(key) ?? {
-      date: new Date(entry.timestamp.getFullYear(), entry.timestamp.getMonth(), entry.timestamp.getDate()),
-      energySamples: [],
-      temperatures: [],
-      occupancies: [],
+      timestamp: new Date(entry.timestamp.getFullYear(), entry.timestamp.getMonth(), entry.timestamp.getDate()),
+      totalKwh: 0,
+      averageTemperature: [],
+      averageOccupancy: [],
+      energyCost: 0,
+      revenue: 0,
     };
 
-    current.energySamples.push(entry.freezerEnergy + entry.equipmentEnergy);
-    current.temperatures.push(entry.temperature);
-    current.occupancies.push(entry.occupancy);
+    current.totalKwh += entry.totalKwh;
+    current.averageTemperature.push(entry.averageTemperature);
+    current.averageOccupancy.push(entry.averageOccupancy);
+    current.energyCost += entry.energyCost;
+    current.revenue += entry.grossRevenue;
     grouped.set(key, current);
   });
 
-  if (grouped.size === 0 && referenceDate) {
-    grouped.set(formatLocalDateKey(referenceDate), {
-      date: new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()),
-      energySamples: [0],
-      temperatures: [],
-      occupancies: [],
-    });
-  }
-
-  const entries = Array.from(grouped.values()).sort((left, right) => left.date.getTime() - right.date.getTime());
-  const weightTotal = sum(entries.map((entry) => Math.max(average(entry.energySamples), 0)));
-  const fallbackDailyKwh = entries.length > 0 ? totalKwh / entries.length : 0;
-
-  return entries.map((entry) => {
-    const avgEnergy = average(entry.energySamples);
-    const dayWeight = Math.max(avgEnergy, 0);
-    const estimatedKwh =
-      totalKwh > 0
-        ? weightTotal > 0
-          ? (totalKwh * dayWeight) / weightTotal
-          : fallbackDailyKwh
-        : avgEnergy * FINANCIAL_CONFIG.WORKING_HOURS_PER_DAY;
-    const hourlyBreakdown = buildHourlyBreakdown(estimatedKwh, hourlyAverages);
-    const energyCost = calculateEnergyCost(estimatedKwh, hourlyBreakdown, [...TARIFFS]);
-    const revenue = calculateRevenue(estimatedKwh, FINANCIAL_CONFIG.REVENUE_PER_KWH);
-
-    return {
-      date: formatLocalDateKey(entry.date),
-      label: formatDayLabel(entry.date),
-      totalKwh: estimatedKwh,
-      averageTemperature: average(entry.temperatures),
-      averageOccupancy: average(entry.occupancies),
-      energyCost,
-      revenue,
-    };
-  });
+  return Array.from(grouped.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, entry]) => ({
+      date,
+      label: formatDayLabel(entry.timestamp),
+      totalKwh: round(entry.totalKwh),
+      averageTemperature: round(average(entry.averageTemperature)),
+      averageOccupancy: round(average(entry.averageOccupancy)),
+      energyCost: round(entry.energyCost),
+      revenue: round(entry.revenue),
+    }));
 }
 
 export function buildMonthlyComparison(dailyData: DailyEntry[], maxMonths = 3): MonthlyEntry[] {
@@ -215,9 +410,9 @@ export function buildMonthlyComparison(dailyData: DailyEntry[], maxMonths = 3): 
     .slice(-maxMonths)
     .map((entry) => ({
       month: formatMonthLabel(entry.date),
-      totalKwh: entry.totalKwh,
-      energyCost: entry.energyCost,
-      revenue: entry.revenue,
+      totalKwh: round(entry.totalKwh),
+      energyCost: round(entry.energyCost),
+      revenue: round(entry.revenue),
     }));
 }
 
@@ -246,8 +441,8 @@ export function buildCumulativeData(
       return {
         day,
         label: String(day).padStart(2, '0'),
-        energyAccum,
-        revenueAccum,
+        energyAccum: round(energyAccum),
+        revenueAccum: round(revenueAccum),
       };
     });
 }
@@ -257,116 +452,149 @@ export function calculateChange(currentValue: number, previousValue: number): nu
     return 0;
   }
 
-  return ((currentValue - previousValue) / previousValue) * 100;
+  return round(((currentValue - previousValue) / previousValue) * 100);
 }
 
-function getPeakTariffCostShare(hourlyAverages: HourlyAvgEntry[]): number {
-  if (hourlyAverages.length === 0) {
-    return 0;
-  }
-
-  const weightedCosts = hourlyAverages.map((entry) => entry.avgEnergy * entry.tariff);
-  const totalCostWeight = sum(weightedCosts);
-
-  if (totalCostWeight <= 0) {
-    return 0;
-  }
-
-  const peakCostWeight = sum(
-    hourlyAverages
-      .filter((entry) => entry.hour >= 18 && entry.hour < 21)
-      .map((entry) => entry.avgEnergy * entry.tariff),
+export function buildBusinessCostBreakdown(
+  timeline: BusinessTimelineEntry[],
+): BusinessCostBreakdown {
+  const breakdown = timeline.reduce(
+    (accumulator, entry) => ({
+      energy: accumulator.energy + entry.energyCost,
+      payroll: accumulator.payroll + entry.payrollCost,
+      rent: accumulator.rent + entry.rentCost,
+      maintenance: accumulator.maintenance + entry.maintenanceCost,
+      lostMerchandise: accumulator.lostMerchandise + entry.lostMerchandiseCost,
+      total: accumulator.total + entry.totalCosts,
+    }),
+    {
+      energy: 0,
+      payroll: 0,
+      rent: 0,
+      maintenance: 0,
+      lostMerchandise: 0,
+      total: 0,
+    },
   );
 
-  return (peakCostWeight / totalCostWeight) * 100;
+  return {
+    energy: round(breakdown.energy),
+    payroll: round(breakdown.payroll),
+    rent: round(breakdown.rent),
+    maintenance: round(breakdown.maintenance),
+    lostMerchandise: round(breakdown.lostMerchandise),
+    total: round(breakdown.total),
+  };
 }
 
 export function generateBusinessInsights(data: BusinessData): InsightCard[] {
+  if (data.timeline.length === 0) {
+    return [
+      {
+        title: 'Sem serie financeira',
+        text: 'Ainda nao ha buckets suficientes para montar os indicadores do negocio.',
+        variant: 'amber',
+      },
+    ];
+  }
+
+  const costEntries: Array<{ label: string; value: number }> = [
+    { label: 'energia', value: data.costBreakdown.energy },
+    { label: 'folha', value: data.costBreakdown.payroll },
+    { label: 'aluguel', value: data.costBreakdown.rent },
+    { label: 'manutencao', value: data.costBreakdown.maintenance },
+    { label: 'perdas', value: data.costBreakdown.lostMerchandise },
+  ];
+  const largestCost = [...costEntries].sort((left, right) => right.value - left.value)[0] ?? {
+    label: 'energia',
+    value: 0,
+  };
+  const largestCostShare =
+    data.costBreakdown.total > 0
+      ? round((largestCost.value / data.costBreakdown.total) * 100)
+      : 0;
   const insights: InsightCard[] = [];
-  const peakTariffCostShare = getPeakTariffCostShare(data.hourlyAverages);
 
-  if (data.revenueChange > data.costChange) {
+  if (data.margin >= 20) {
     insights.push({
-      title: 'Crescimento Sustentavel',
-      text: `Faturamento cresceu ${data.revenueChange.toFixed(1)}% enquanto o custo energetico variou ${data.costChange.toFixed(1)}%.`,
+      title: 'Margem operacional saudavel',
+      text: `A janela atual sustenta margem de ${data.margin.toFixed(1)}%, com lucro estimado de R$ ${data.operatingProfit.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}.`,
       variant: 'blue',
     });
   } else {
     insights.push({
-      title: 'Pressao de Custos',
-      text: `Custo energetico variou ${data.costChange.toFixed(1)}%, acima do faturamento (${data.revenueChange.toFixed(1)}%).`,
+      title: 'Margem pressionada',
+      text: `A margem caiu para ${data.margin.toFixed(1)}%. Vale revisar o peso de custos fixos e perdas sobre o volume processado.`,
       variant: 'amber',
     });
   }
 
-  if (data.margin > 85) {
-    insights.push({
-      title: 'Margem Saudavel',
-      text: `A operacao sustenta margem atual de ${data.margin.toFixed(1)}%, mesmo com os custos de energia monitorados.`,
-      variant: 'blue',
-    });
-  } else if (peakTariffCostShare > 40) {
-    insights.push({
-      title: 'Oportunidade',
-      text: `Horarios de ponta concentram ${peakTariffCostShare.toFixed(0)}% do custo horario estimado. Ajustes nessa faixa podem reduzir o gasto mensal.`,
-      variant: 'amber',
-    });
-  } else {
-    insights.push({
-      title: 'Operacao Estavel',
-      text: `A projeção de margem no fechamento do periodo aponta ${data.projectedMargin.toFixed(1)}%, com custo energetico projetado de R$ ${data.projectedEnergyCost.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}.`,
-      variant: 'blue',
-    });
-  }
+  insights.push({
+    title: 'Maior pressao de custo',
+    text: `${largestCost.label.charAt(0).toUpperCase()}${largestCost.label.slice(1)} responde por ${largestCostShare.toFixed(1)}% do custo total modelado nesta janela.`,
+    variant: largestCost.label === 'energia' || largestCost.label === 'perdas' ? 'amber' : 'blue',
+  });
 
-  return insights.slice(0, 2);
+  return insights;
 }
 
 export function buildBusinessSummary(params: {
+  timeline: BusinessTimelineEntry[];
+  timelineGranularity: BusinessTimelineGranularity;
   dailyData: DailyEntry[];
   monthlyComparison: MonthlyEntry[];
   hourlyAverages: HourlyAvgEntry[];
   referenceDate: Date | null;
-  projectionDaysElapsed?: number;
-  projectionTotalDays?: number;
+  period: OperationalChartPeriod;
+  assumptions?: BusinessModelAssumptions;
 }): BusinessData {
   const {
+    timeline,
+    timelineGranularity,
     dailyData,
     monthlyComparison,
     hourlyAverages,
     referenceDate,
-    projectionDaysElapsed,
-    projectionTotalDays,
+    period,
+    assumptions = BUSINESS_MODEL_ASSUMPTIONS,
   } = params;
-  const currentMonth =
-    monthlyComparison[monthlyComparison.length - 1] ?? {
-      month: '--',
-      totalKwh: 0,
-      energyCost: 0,
-      revenue: 0,
-    };
+  const currentRevenue = round(sum(timeline.map((entry) => entry.grossRevenue)));
+  const energyCost = round(sum(timeline.map((entry) => entry.energyCost)));
+  const totalCosts = round(sum(timeline.map((entry) => entry.totalCosts)));
+  const operatingProfit = round(sum(timeline.map((entry) => entry.operatingProfit)));
+  const estimatedProcessedKg = round(sum(timeline.map((entry) => entry.processedKg)));
+  const periodDays = period === '24h' ? 1 : Number.parseInt(period, 10);
+  const projectedRevenue = projectMonthly(
+    currentRevenue,
+    Math.max(periodDays, 1),
+    FINANCIAL_CONFIG.DAYS_PER_MONTH,
+  );
+  const projectedEnergyCost = projectMonthly(
+    energyCost,
+    Math.max(periodDays, 1),
+    FINANCIAL_CONFIG.DAYS_PER_MONTH,
+  );
+  const projectedTotalCosts = projectMonthly(
+    totalCosts,
+    Math.max(periodDays, 1),
+    FINANCIAL_CONFIG.DAYS_PER_MONTH,
+  );
+  const margin = calculateMargin(currentRevenue, totalCosts);
+  const projectedMargin = calculateMargin(projectedRevenue, projectedTotalCosts);
   const previousMonth =
-    monthlyComparison[monthlyComparison.length - 2] ?? {
-      month: '--',
-      totalKwh: 0,
-      energyCost: 0,
-      revenue: 0,
-    };
-  const daysElapsed = projectionDaysElapsed ?? referenceDate?.getDate() ?? 0;
-  const totalDaysInMonth =
-    projectionTotalDays ??
-    (referenceDate
-      ? new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate()
-      : FINANCIAL_CONFIG.DAYS_PER_MONTH);
-  const currentRevenue = currentMonth.revenue;
-  const energyCost = currentMonth.energyCost;
-  const projectedRevenue = projectMonthly(currentRevenue, daysElapsed, totalDaysInMonth);
-  const projectedEnergyCost = projectMonthly(energyCost, daysElapsed, totalDaysInMonth);
-  const margin = calculateMargin(currentRevenue, energyCost);
-  const projectedMargin = calculateMargin(projectedRevenue, projectedEnergyCost);
-  const revenueChange = calculateChange(currentRevenue, previousMonth.revenue);
-  const costChange = calculateChange(energyCost, previousMonth.energyCost);
-  const cumulativeData = buildCumulativeData(dailyData, referenceDate);
+    monthlyComparison.length > 1
+      ? monthlyComparison[monthlyComparison.length - 2]
+      : null;
+  const currentMonth =
+    monthlyComparison.length > 0
+      ? monthlyComparison[monthlyComparison.length - 1]
+      : null;
+  const revenueChange = currentMonth && previousMonth
+    ? calculateChange(currentMonth.revenue, previousMonth.revenue)
+    : 0;
+  const costChange = currentMonth && previousMonth
+    ? calculateChange(currentMonth.energyCost, previousMonth.energyCost)
+    : 0;
 
   return {
     currentRevenue,
@@ -377,10 +605,19 @@ export function buildBusinessSummary(params: {
     projectedMargin,
     revenueChange,
     costChange,
+    estimatedProcessedKg,
+    totalCosts,
+    operatingProfit,
+    costBreakdown: buildBusinessCostBreakdown(timeline),
+    timeline,
+    timelineGranularity,
+    assumptions,
     monthlyComparison,
     dailyData,
     hourlyAverages,
-    cumulativeData,
+    cumulativeData: buildCumulativeData(dailyData, referenceDate),
     referenceDate,
   };
 }
+
+export { getBusinessPeriodShare };

@@ -137,6 +137,47 @@ export interface MonthlyEntry {
   revenue: number;
 }
 
+export type BusinessTimelineGranularity = 'hour' | 'day';
+
+export interface BusinessModelAssumptions {
+  employeeCount: number;
+  monthlyPayrollCost: number;
+  monthlyRentCost: number;
+  monthlyMaintenanceCost: number;
+  lossRate: number;
+  merchandiseCostPerKg: number;
+  kwhPerKgProcessed: number;
+  averageSalePricePerKg: number;
+}
+
+export interface BusinessCostBreakdown {
+  energy: number;
+  payroll: number;
+  rent: number;
+  maintenance: number;
+  lostMerchandise: number;
+  total: number;
+}
+
+export interface BusinessTimelineEntry {
+  key: string;
+  label: string;
+  timestamp: Date;
+  totalKwh: number;
+  processedKg: number;
+  grossRevenue: number;
+  energyCost: number;
+  payrollCost: number;
+  rentCost: number;
+  maintenanceCost: number;
+  lostMerchandiseCost: number;
+  totalCosts: number;
+  operatingProfit: number;
+  margin: number;
+  averageTemperature: number;
+  averageOccupancy: number;
+}
+
 export interface LogisticsData {
   avgEnergy24h: number;
   peakOccupancy: number;
@@ -157,6 +198,13 @@ export interface BusinessData {
   projectedMargin: number;
   revenueChange: number;
   costChange: number;
+  estimatedProcessedKg: number;
+  totalCosts: number;
+  operatingProfit: number;
+  costBreakdown: BusinessCostBreakdown;
+  timeline: BusinessTimelineEntry[];
+  timelineGranularity: BusinessTimelineGranularity;
+  assumptions: BusinessModelAssumptions;
   monthlyComparison: MonthlyEntry[];
   dailyData: DailyEntry[];
   hourlyAverages: HourlyAvgEntry[];

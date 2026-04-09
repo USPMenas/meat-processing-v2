@@ -1,33 +1,22 @@
-import { generateBusinessInsights } from '@/domain/transformers/businessTransformer';
-import type { BusinessData, DailyEntry, HourlyAvgEntry, MonthlyEntry } from '@/domain/types';
+import { BUSINESS_MODEL_ASSUMPTIONS } from '@/domain/constants/financial';
+import {
+  buildBusinessSummary,
+  buildBusinessTimeline,
+  buildDailyBusinessData,
+  buildMonthlyComparison,
+  generateBusinessInsights,
+  getBusinessPeriodShare,
+} from '@/domain/transformers/businessTransformer';
+import type { HourlyAvgEntry, OperationalData } from '@/domain/types';
 
-function buildDailyData(): DailyEntry[] {
+function buildOperationalSeries(): OperationalData[] {
   return [
     {
-      date: '2026-03-29',
-      label: '29/03',
-      totalKwh: 200,
-      averageTemperature: -18,
-      averageOccupancy: 70,
-      energyCost: 130,
-      revenue: 1700,
-    },
-  ];
-}
-
-function buildMonthlyComparison(): MonthlyEntry[] {
-  return [
-    {
-      month: 'fev/26',
-      totalKwh: 500,
-      energyCost: 300,
-      revenue: 4000,
-    },
-    {
-      month: 'mar/26',
-      totalKwh: 650,
-      energyCost: 420,
-      revenue: 4200,
+      freezerEnergy: 100,
+      equipmentEnergy: 140,
+      temperature: -18,
+      occupancy: 72,
+      timestamp: new Date('2026-03-31T12:00:00'),
     },
   ];
 }
@@ -35,51 +24,84 @@ function buildMonthlyComparison(): MonthlyEntry[] {
 function buildHourlyAverages(): HourlyAvgEntry[] {
   return Array.from({ length: 24 }, (_, hour) => ({
     hour,
-    avgEnergy: hour >= 18 && hour < 21 ? 20 : 10,
-    avgOccupancy: hour === 8 ? 82 : 55,
+    avgEnergy: hour === 12 ? 240 : 0,
+    avgOccupancy: hour === 12 ? 72 : 0,
     tariff: hour >= 22 || hour < 6 ? 0.5 : hour >= 18 && hour < 21 ? 0.85 : 0.65,
   }));
 }
 
-function buildBusinessData(overrides: Partial<BusinessData> = {}): BusinessData {
-  return {
-    currentRevenue: 4200,
-    projectedRevenue: 8400,
-    energyCost: 420,
-    projectedEnergyCost: 840,
-    margin: 90,
-    projectedMargin: 90,
-    revenueChange: 5,
-    costChange: 2,
-    dailyData: buildDailyData(),
-    monthlyComparison: buildMonthlyComparison(),
-    hourlyAverages: buildHourlyAverages(),
-    cumulativeData: [
-      {
-        day: 29,
-        label: '29',
-        energyAccum: 130,
-        revenueAccum: 1700,
-      },
-    ],
-    referenceDate: new Date('2026-03-29T12:00:00'),
-    ...overrides,
-  };
-}
-
 describe('businessTransformer', () => {
-  it('returns the sustainable growth insight when revenue grows faster than cost', () => {
-    const insights = generateBusinessInsights(buildBusinessData());
+  it('converts 240 kWh into 100 kg processed and calculates revenue and losses correctly', () => {
+    const { timeline } = buildBusinessTimeline({
+      operationalSeries: buildOperationalSeries(),
+      period: '24h',
+      referenceDate: new Date('2026-03-31T12:00:00'),
+    });
+    const activeBucket = timeline.find((entry) => entry.totalKwh > 0);
 
-    expect(insights[0]?.title).toMatch(/Crescimento Sustentavel/i);
-    expect(insights[0]?.text).toMatch(/5.0%/i);
-    expect(insights[0]?.text).toMatch(/2.0%/i);
+    expect(activeBucket).toBeDefined();
+    expect(activeBucket?.totalKwh).toBeCloseTo(240, 2);
+    expect(activeBucket?.processedKg).toBeCloseTo(100, 2);
+    expect(activeBucket?.grossRevenue).toBeCloseTo(1600, 2);
+    expect(activeBucket?.lostMerchandiseCost).toBeCloseTo(55, 2);
   });
 
-  it('returns the healthy margin insight when the operation stays above 85%', () => {
-    const insights = generateBusinessInsights(buildBusinessData({ margin: 92 }));
+  it('applies the correct period share for 24h, 7d and 30d windows', () => {
+    expect(getBusinessPeriodShare('24h')).toBeCloseTo(1 / 30, 5);
+    expect(getBusinessPeriodShare('7d')).toBeCloseTo(7 / 30, 5);
+    expect(getBusinessPeriodShare('30d')).toBe(1);
+  });
 
-    expect(insights[1]?.title).toMatch(/Margem Saudavel/i);
-    expect(insights[1]?.text).toMatch(/92.0%/i);
+  it('builds business summaries with hourly granularity for 24h and daily granularity for 7d', () => {
+    const hourlyTimeline = buildBusinessTimeline({
+      operationalSeries: buildOperationalSeries(),
+      period: '24h',
+      referenceDate: new Date('2026-03-31T12:00:00'),
+    });
+    const hourlyDailyData = buildDailyBusinessData(hourlyTimeline.timeline, hourlyTimeline.granularity);
+    const hourlySummary = buildBusinessSummary({
+      timeline: hourlyTimeline.timeline,
+      timelineGranularity: hourlyTimeline.granularity,
+      dailyData: hourlyDailyData,
+      monthlyComparison: buildMonthlyComparison(hourlyDailyData, 2),
+      hourlyAverages: buildHourlyAverages(),
+      referenceDate: new Date('2026-03-31T12:00:00'),
+      period: '24h',
+    });
+
+    const dailyTimeline = buildBusinessTimeline({
+      operationalSeries: buildOperationalSeries(),
+      period: '7d',
+      referenceDate: new Date('2026-03-31T12:00:00'),
+    });
+
+    expect(hourlySummary.timelineGranularity).toBe('hour');
+    expect(hourlySummary.estimatedProcessedKg).toBeCloseTo(100, 2);
+    expect(hourlySummary.assumptions.employeeCount).toBe(4);
+    expect(dailyTimeline.granularity).toBe('day');
+    expect(dailyTimeline.timeline).toHaveLength(7);
+  });
+
+  it('generates managerial insights from the new business model', () => {
+    const { timeline, granularity } = buildBusinessTimeline({
+      operationalSeries: buildOperationalSeries(),
+      period: '24h',
+      referenceDate: new Date('2026-03-31T12:00:00'),
+      assumptions: BUSINESS_MODEL_ASSUMPTIONS,
+    });
+    const dailyData = buildDailyBusinessData(timeline, granularity);
+    const summary = buildBusinessSummary({
+      timeline,
+      timelineGranularity: granularity,
+      dailyData,
+      monthlyComparison: buildMonthlyComparison(dailyData, 2),
+      hourlyAverages: buildHourlyAverages(),
+      referenceDate: new Date('2026-03-31T12:00:00'),
+      period: '24h',
+    });
+    const insights = generateBusinessInsights(summary);
+
+    expect(insights[0]?.title).toMatch(/Margem/i);
+    expect(insights[1]?.title).toMatch(/Maior pressao de custo/i);
   });
 });

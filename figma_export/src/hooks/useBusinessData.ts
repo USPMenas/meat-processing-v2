@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DASHBOARD_PERIOD_DAYS, DASHBOARD_PERIOD_HOURS } from '../config/periods';
 import { SENSOR_MAP } from '../config/channels';
 import { DEFAULT_OCCUPANCY_CONFIG } from '../domain/constants/dashboard';
 import {
   buildBusinessSummary,
+  buildBusinessTimeline,
   buildDailyBusinessData,
   buildMonthlyComparison,
-  estimateTotalConsumptionKwhFromSeries,
-  getTotalConsumptionKwh,
 } from '../domain/transformers/businessTransformer';
 import { buildHourlyData } from '../domain/transformers/logisticsTransformer';
 import type {
@@ -34,7 +32,6 @@ export function useBusinessData(
   useEffect(() => {
     return subscribeToCacheUpdates((detail) => {
       if (
-        detail.key === getAnalyticsCacheKey(channel, 'consumption') ||
         detail.key === getAnalyticsCacheKey(channel, 'hourly_profile') ||
         detail.key === getAnalyticsCacheKey(channel, 'current_by_sensor')
       ) {
@@ -44,7 +41,6 @@ export function useBusinessData(
   }, [channel]);
 
   return useMemo(() => {
-    const consumption = getCachedAnalytics(channel, 'consumption');
     const cachedHourlyProfile = getCachedAnalytics(channel, 'hourly_profile');
     const currentBySensor = getCachedAnalytics(channel, 'current_by_sensor');
     const operationalSeries = history.data;
@@ -59,39 +55,30 @@ export function useBusinessData(
       sensorMap: { ...SENSOR_MAP },
       occupancyConfig: { ...DEFAULT_OCCUPANCY_CONFIG },
     });
-    const analyticsTotalKwh = getTotalConsumptionKwh(consumption?.results);
-    const selectedTotalKwh =
-      analyticsTotalKwh > 0 && period === '30d'
-        ? analyticsTotalKwh
-        : operationalSeries.length > 0
-        ? estimateTotalConsumptionKwhFromSeries(
-            operationalSeries,
-            Math.max(1, DASHBOARD_PERIOD_HOURS[period] / Math.max(operationalSeries.length, 1)),
-          )
-        : analyticsTotalKwh;
-    const dailyData = buildDailyBusinessData({
+    const { timeline, granularity } = buildBusinessTimeline({
       operationalSeries,
-      totalKwh: selectedTotalKwh,
-      hourlyAverages,
+      period,
       referenceDate,
     });
+    const dailyData = buildDailyBusinessData(timeline, granularity);
     const monthlyComparison = buildMonthlyComparison(
       dailyData,
-      period === '30d' ? 3 : 1,
+      period === '30d' ? 3 : 2,
     );
     const summary = buildBusinessSummary({
+      timeline,
+      timelineGranularity: granularity,
       dailyData,
       monthlyComparison,
       hourlyAverages,
       referenceDate,
-      projectionDaysElapsed: Math.max(dailyData.length, 1),
-      projectionTotalDays: DASHBOARD_PERIOD_DAYS[period],
+      period,
     });
     const hasData =
-      summary.dailyData.length > 0 ||
+      summary.timeline.length > 0 ||
       summary.currentRevenue > 0 ||
-      summary.energyCost > 0 ||
-      summary.hourlyAverages.some((entry) => entry.avgEnergy > 0);
+      summary.totalCosts > 0 ||
+      operationalSeries.length > 0;
 
     return {
       ...summary,
@@ -100,7 +87,7 @@ export function useBusinessData(
       error: hasData
         ? history.error
         : history.error ??
-          'Os dados financeiros ainda nao estao disponiveis no cache.',
+          'Os dados do modelo de negocios ainda nao estao disponiveis no cache.',
     };
   }, [
     analyticsRevision,
