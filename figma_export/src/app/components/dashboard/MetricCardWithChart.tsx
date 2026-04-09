@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react';
+import { Info, LucideIcon } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { MiniChart } from './MiniChart';
 import {
@@ -7,6 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+
+type ChartPoint = object;
 
 interface MetricCardWithChartProps {
   title: string;
@@ -19,7 +22,7 @@ interface MetricCardWithChartProps {
   };
   status?: 'normal' | 'warning' | 'critical';
   variant?: 'default' | 'business';
-  miniChartData?: any[];
+  miniChartData?: ChartPoint[];
   miniChartDataKey?: string;
   miniChartColor?: string;
   miniChartType?: 'line' | 'area';
@@ -27,6 +30,8 @@ interface MetricCardWithChartProps {
   detailTitle?: string;
   subtitle?: string;
   footer?: ReactNode;
+  infoContent?: ReactNode;
+  infoTitle?: string;
 }
 
 export function MetricCardWithChart({
@@ -45,6 +50,8 @@ export function MetricCardWithChart({
   detailTitle,
   subtitle,
   footer,
+  infoContent,
+  infoTitle,
 }: MetricCardWithChartProps) {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -61,6 +68,7 @@ export function MetricCardWithChart({
   };
   
   const hasDetails = !!detailContent;
+  const hasInfo = !!infoContent;
   
   return (
     <>
@@ -76,7 +84,41 @@ export function MetricCardWithChart({
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <p className={`text-xs ${variant === 'business' ? 'text-blue-600 font-medium' : 'text-gray-500'} mb-1`}>{title}</p>
+            <div className="mb-1 flex items-center gap-1">
+              <p className={`text-xs ${variant === 'business' ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                {title}
+              </p>
+              {hasInfo && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`Como calculamos ${title}`}
+                      className="inline-flex size-4 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      <Info className="size-3.5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-80 space-y-2 border-gray-200 bg-white text-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    <p className="font-semibold text-gray-900">
+                      {infoTitle ?? title}
+                    </p>
+                    <div className="space-y-2 text-xs leading-relaxed text-gray-600">
+                      {infoContent}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
             <div className="flex items-baseline gap-2">
               <span className={`text-2xl font-semibold ${variant === 'business' ? 'text-gray-900' : 'text-gray-900'}`}>
                 {typeof value === 'number' ? value.toFixed(1) : value}

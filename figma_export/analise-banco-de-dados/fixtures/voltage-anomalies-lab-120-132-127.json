@@ -1,0 +1,360 @@
+{
+  "channel": "lab",
+  "from": "2025-12-01T00:00:00",
+  "to": "2026-03-31T23:59:59",
+  "lower_limit": 120.0,
+  "upper_limit": 132.0,
+  "nominal_voltage": 127.0,
+  "results": [
+    {
+      "timestamp": "2026-03-31T06:23:10",
+      "sensor": "fase2",
+      "voltage": 132.1744842529297,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:23:05",
+      "sensor": "fase2",
+      "voltage": 132.2601318359375,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:23:00",
+      "sensor": "fase2",
+      "voltage": 132.33551025390625,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:22:55",
+      "sensor": "fase2",
+      "voltage": 132.37225341796875,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:22:49",
+      "sensor": "fase2",
+      "voltage": 132.35195922851562,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:22:44",
+      "sensor": "fase2",
+      "voltage": 132.4024200439453,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:22:39",
+      "sensor": "fase2",
+      "voltage": 132.23892211914062,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:22:34",
+      "sensor": "fase2",
+      "voltage": 132.41796875,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:22:29",
+      "sensor": "fase2",
+      "voltage": 132.2122039794922,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:22:24",
+      "sensor": "fase2",
+      "voltage": 132.25045776367188,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:22:19",
+      "sensor": "fase2",
+      "voltage": 132.4622344970703,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:22:19",
+      "sensor": "fase3",
+      "voltage": 132.0122528076172,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 3.9
+    },
+    {
+      "timestamp": "2026-03-31T06:22:14",
+      "sensor": "fase2",
+      "voltage": 132.46389770507812,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:22:14",
+      "sensor": "fase3",
+      "voltage": 132.04452514648438,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:22:09",
+      "sensor": "fase2",
+      "voltage": 132.5135955810547,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:22:09",
+      "sensor": "fase3",
+      "voltage": 132.0774688720703,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:22:04",
+      "sensor": "fase2",
+      "voltage": 132.34048461914062,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:21:59",
+      "sensor": "fase2",
+      "voltage": 132.5047607421875,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:21:59",
+      "sensor": "fase3",
+      "voltage": 132.07534790039062,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:21:54",
+      "sensor": "fase2",
+      "voltage": 132.5639190673828,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.4
+    },
+    {
+      "timestamp": "2026-03-31T06:21:54",
+      "sensor": "fase3",
+      "voltage": 132.16571044921875,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:21:49",
+      "sensor": "fase2",
+      "voltage": 132.61312866210938,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.4
+    },
+    {
+      "timestamp": "2026-03-31T06:21:49",
+      "sensor": "fase3",
+      "voltage": 132.1749267578125,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:21:44",
+      "sensor": "fase2",
+      "voltage": 132.50978088378906,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:21:44",
+      "sensor": "fase3",
+      "voltage": 132.076416015625,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:21:39",
+      "sensor": "fase2",
+      "voltage": 132.33055114746094,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:21:34",
+      "sensor": "fase2",
+      "voltage": 132.29380798339844,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:21:29",
+      "sensor": "fase2",
+      "voltage": 132.23361206054688,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:21:24",
+      "sensor": "fase2",
+      "voltage": 132.25930786132812,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:21:19",
+      "sensor": "fase2",
+      "voltage": 132.2261199951172,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:21:14",
+      "sensor": "fase2",
+      "voltage": 132.35435485839844,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:21:09",
+      "sensor": "fase2",
+      "voltage": 132.49374389648438,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:21:09",
+      "sensor": "fase3",
+      "voltage": 132.0322723388672,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:21:04",
+      "sensor": "fase2",
+      "voltage": 132.40623474121094,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:59",
+      "sensor": "fase2",
+      "voltage": 132.37063598632812,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:20:54",
+      "sensor": "fase2",
+      "voltage": 132.4069061279297,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:49",
+      "sensor": "fase2",
+      "voltage": 132.27880859375,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.2
+    },
+    {
+      "timestamp": "2026-03-31T06:20:44",
+      "sensor": "fase2",
+      "voltage": 132.4203643798828,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:39",
+      "sensor": "fase2",
+      "voltage": 132.6495361328125,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.4
+    },
+    {
+      "timestamp": "2026-03-31T06:20:39",
+      "sensor": "fase3",
+      "voltage": 132.14990234375,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.1
+    },
+    {
+      "timestamp": "2026-03-31T06:20:34",
+      "sensor": "fase2",
+      "voltage": 132.490234375,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:29",
+      "sensor": "fase2",
+      "voltage": 132.4561004638672,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:24",
+      "sensor": "fase2",
+      "voltage": 132.52670288085938,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.4
+    },
+    {
+      "timestamp": "2026-03-31T06:20:24",
+      "sensor": "fase3",
+      "voltage": 132.0595703125,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:20:19",
+      "sensor": "fase2",
+      "voltage": 132.49960327148438,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:19",
+      "sensor": "fase3",
+      "voltage": 132.016357421875,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 3.9
+    },
+    {
+      "timestamp": "2026-03-31T06:20:14",
+      "sensor": "fase2",
+      "voltage": 132.4221649169922,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    },
+    {
+      "timestamp": "2026-03-31T06:20:09",
+      "sensor": "fase2",
+      "voltage": 132.55117797851562,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.4
+    },
+    {
+      "timestamp": "2026-03-31T06:20:09",
+      "sensor": "fase3",
+      "voltage": 132.07757568359375,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.0
+    },
+    {
+      "timestamp": "2026-03-31T06:20:04",
+      "sensor": "fase2",
+      "voltage": 132.48606872558594,
+      "anomaly_type": "HIGH",
+      "deviation_pct": 4.3
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "channel": "lab",
+  "sensor": "fase1",
+  "from": "2026-03-31T11:40:00",
+  "to": "2026-03-31T11:41:00",
+  "count": 12,
+  "measurements": [
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.79499626159668,
+      "active_power": 4.785167694091797,
+      "reactive_power": 3.268662214279175,
+      "power_factor": 0.8257412910461426,
+      "current": 0.04532184824347496,
+      "voltage": 127.86319732666016,
+      "timestamp": "2026-03-31T11:40:56"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.812862873077393,
+      "active_power": 4.802718162536621,
+      "reactive_power": 3.2746410369873047,
+      "power_factor": 0.8262225389480591,
+      "current": 0.04544500261545181,
+      "voltage": 127.90983581542969,
+      "timestamp": "2026-03-31T11:40:51"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.813027858734131,
+      "active_power": 4.80369234085083,
+      "reactive_power": 3.2735047340393066,
+      "power_factor": 0.826366662979126,
+      "current": 0.045507024973630905,
+      "voltage": 127.73912811279297,
+      "timestamp": "2026-03-31T11:40:46"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.823685169219971,
+      "active_power": 4.816068172454834,
+      "reactive_power": 3.2742626667022705,
+      "power_factor": 0.8269794583320618,
+      "current": 0.04552561044692993,
+      "voltage": 127.92108154296875,
+      "timestamp": "2026-03-31T11:40:41"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.833452224731445,
+      "active_power": 4.823784351348877,
+      "reactive_power": 3.2802846431732178,
+      "power_factor": 0.8269175887107849,
+      "current": 0.04559215158224106,
+      "voltage": 127.94860076904297,
+      "timestamp": "2026-03-31T11:40:36"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.974177360534668,
+      "active_power": 4.974900245666504,
+      "reactive_power": 3.3077430725097656,
+      "power_factor": 0.8327339291572571,
+      "current": 0.04670252278447151,
+      "voltage": 127.9197998046875,
+      "timestamp": "2026-03-31T11:40:31"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.802461624145508,
+      "active_power": 4.787426948547363,
+      "reactive_power": 3.2785825729370117,
+      "power_factor": 0.8250682950019836,
+      "current": 0.04531078040599823,
+      "voltage": 128.05918884277344,
+      "timestamp": "2026-03-31T11:40:26"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 6.290320873260498,
+      "active_power": 5.319125175476074,
+      "reactive_power": 3.3578333854675293,
+      "power_factor": 0.8456047177314758,
+      "current": 0.04913702979683876,
+      "voltage": 128.01589965820312,
+      "timestamp": "2026-03-31T11:40:20"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.901708126068115,
+      "active_power": 4.893756866455078,
+      "reactive_power": 3.2986817359924316,
+      "power_factor": 0.8292102217674255,
+      "current": 0.046140607446432114,
+      "voltage": 127.90703582763672,
+      "timestamp": "2026-03-31T11:40:15"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.805278778076172,
+      "active_power": 4.797438621520996,
+      "reactive_power": 3.268921375274658,
+      "power_factor": 0.8263924717903137,
+      "current": 0.045381635427474976,
+      "voltage": 127.92132568359375,
+      "timestamp": "2026-03-31T11:40:10"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.847436428070068,
+      "active_power": 4.838787078857422,
+      "reactive_power": 3.283085823059082,
+      "power_factor": 0.8275057077407837,
+      "current": 0.04571857303380966,
+      "voltage": 127.90067291259766,
+      "timestamp": "2026-03-31T11:40:05"
+    },
+    {
+      "channel": "lab",
+      "sensor": "fase1",
+      "apparent_power": 5.835640907287598,
+      "active_power": 4.827906131744385,
+      "reactive_power": 3.278113603591919,
+      "power_factor": 0.8273137807846069,
+      "current": 0.045638300478458405,
+      "voltage": 127.86717987060547,
+      "timestamp": "2026-03-31T11:40:00"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-04-09T14:16:56Z",
+  "source": "backup_2026-03-31.db",
+  "defaultChannel": "lab",
+  "channels": [
+    {
+      "channel": "lab",
+      "snapshotId": "lab",
+      "sensors": [
+        "fase1",
+        "fase2",
+        "fase3"
+      ],
+      "latestMeasurementAt": "2026-03-31T10:24:17",
+      "measurementRange": {
+        "from": "2025-12-01T19:20:42",
+        "to": "2026-03-31T10:24:17"
+      }
+    }
+  ]
+}

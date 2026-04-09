@@ -1,189 +1,469 @@
-import { DashboardLayout } from '../components/layout/DashboardLayout';
+import { useMemo } from 'react';
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Clock, Package, TrendingDown, WifiOff, Zap } from 'lucide-react';
+import { FRIGORIFICO_CHANNEL } from '../../config/channels';
+import { getPeriodLabel } from '../../config/periods';
+import { generateLogisticsInsights } from '../../domain/transformers/logisticsTransformer';
+import { useCacheSync } from '../../hooks/useCacheSync';
+import { useDashboardPeriod } from '../../hooks/useDashboardPeriod';
+import { useLogisticsData } from '../../hooks/useLogisticsData';
+import { DashboardPeriodToolbar } from '../components/dashboard/DashboardPeriodToolbar';
+import { DataSourceBanner } from '../components/dashboard/DataSourceBanner';
+import { ExpandableChartPanel } from '../components/dashboard/ExpandableChartPanel';
 import { MetricCardWithChart } from '../components/dashboard/MetricCardWithChart';
 import { TimeSeriesChart } from '../components/dashboard/TimeSeriesChart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, Area } from 'recharts';
-import { Clock, TrendingDown, Package, Zap } from 'lucide-react';
-import {
-  generateHistoricalData,
-  getEnergyPrices,
-  getOccupancyForecast,
-} from '../utils/mockData';
+import { DashboardLayout } from '../components/layout/DashboardLayout';
+import { Badge } from '../components/ui/badge';
+import { Skeleton } from '../components/ui/skeleton';
+
+function LoadingMetricCard() {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 space-y-3">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+        <Skeleton className="h-10 w-10 rounded-lg" />
+      </div>
+      <div className="mt-4 space-y-2">
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-3 w-36" />
+      </div>
+    </div>
+  );
+}
+
+function LoadingChart({ title }: { title: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-900">{title}</h3>
+      <Skeleton className="h-[240px] w-full" />
+    </div>
+  );
+}
 
 export default function LogisticsDashboard() {
-  const historicalData = generateHistoricalData();
-  const energyPrices = getEnergyPrices();
-  const occupancyForecast = getOccupancyForecast();
-  
-  // Calcula estatísticas
-  const avgEnergy = historicalData.reduce((acc, d) => acc + d.freezerEnergy + d.equipmentEnergy, 0) / historicalData.length;
-  const peakOccupancy = Math.max(...historicalData.map(d => d.occupancy));
-  const lowEnergyHours = energyPrices.filter(p => p.price < 0.60).length;
-  
-  // Últimos 12 pontos para mini gráficos
-  const recentData = historicalData.slice(-12);
-  
-  // Agrupa dados por hora para o gráfico de 24h
-  const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-    const hourData = historicalData.filter(d => d.timestamp.getHours() === hour);
-    if (hourData.length === 0) return null;
-    
-    return {
-      hour,
-      energy: hourData.reduce((acc, d) => acc + d.freezerEnergy + d.equipmentEnergy, 0) / hourData.length,
-      occupancy: hourData.reduce((acc, d) => acc + d.occupancy, 0) / hourData.length,
-      price: energyPrices[hour].price,
-    };
-  }).filter(Boolean);
-  
+  const channel = FRIGORIFICO_CHANNEL;
+  const [selectedPeriod, setSelectedPeriod] = useDashboardPeriod();
+  const sync = useCacheSync(channel);
+  const logistics = useLogisticsData(channel, selectedPeriod);
+  const currentPeriodLabel = getPeriodLabel(selectedPeriod);
+  const insights = useMemo(() => generateLogisticsInsights(logistics), [logistics]);
+  const periodSeries = logistics.periodSeries.map((entry) => ({
+    ...entry,
+    totalEnergy: entry.freezerEnergy + entry.equipmentEnergy,
+  }));
+  const hasData =
+    logistics.avgEnergy24h > 0 ||
+    logistics.peakOccupancy > 0 ||
+    logistics.hourlyData.some((entry) => entry.avgEnergy > 0) ||
+    periodSeries.length > 0;
+  const peakHour = logistics.hourlyData.reduce<{ hour: number; occupancy: number } | null>(
+    (highest, entry) => {
+      if (!highest || entry.avgOccupancy > highest.occupancy) {
+        return {
+          hour: entry.hour,
+          occupancy: entry.avgOccupancy,
+        };
+      }
+
+      return highest;
+    },
+    null,
+  );
+  const highestEnergyHour = logistics.hourlyData.reduce<{ hour: number; value: number } | null>(
+    (highest, entry) => {
+      if (!highest || entry.avgEnergy > highest.value) {
+        return {
+          hour: entry.hour,
+          value: entry.avgEnergy,
+        };
+      }
+
+      return highest;
+    },
+    null,
+  );
+  const nextIdealValue =
+    logistics.nextIdealHour === null
+      ? '--'
+      : String(logistics.nextIdealHour).padStart(2, '0');
+  const nextIdealTariff =
+    logistics.nextIdealHour === null
+      ? null
+      : logistics.energyPrices.find((entry) => entry.hour === logistics.nextIdealHour)?.price ??
+        null;
+
+  if (sync.isLoading && logistics.isLoading && !hasData) {
+    return (
+      <DashboardLayout variant="logistics">
+        <div className="space-y-4">
+          <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold text-gray-900">
+              Carregando planejamento logistico...
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              Sincronizando historico operacional e consolidando o perfil de {currentPeriodLabel.toLowerCase()}.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-base font-semibold text-gray-900">
+              Indicadores de Planejamento
+            </h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, index) => (
+                <LoadingMetricCard key={index} />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <LoadingChart title="Energia vs Ocupacao" />
+            <LoadingChart title="Perfil horario consolidado" />
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <DashboardLayout variant="logistics">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="rounded-xl bg-red-50 p-3 text-red-600">
+                <WifiOff className="size-6" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Nao foi possivel montar a tela de logistica
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {sync.error ?? logistics.error ?? 'Sem dados de planejamento no cache local.'}
+                  </p>
+                </div>
+
+                <DashboardPeriodToolbar
+                  period={selectedPeriod}
+                  onPeriodChange={setSelectedPeriod}
+                  onRefresh={sync.refreshNow}
+                  isRefreshing={sync.isRefreshing}
+                  pollingMode={sync.pollingMode}
+                  align="left"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout variant="logistics">
       <div className="space-y-4">
-        {/* KPIs */}
-        <div>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Indicadores de Planejamento</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCardWithChart
-              title="Consumo Médio (24h)"
-              value={avgEnergy}
-              unit="kW"
-              icon={Zap}
-              subtitle="Últimas 24 horas"
-              miniChartData={recentData.map(d => ({ value: d.freezerEnergy + d.equipmentEnergy }))}
-              miniChartDataKey="value"
-              miniChartColor="#3b82f6"
-              miniChartType="area"
-              footer={
-                <div className="text-xs text-gray-600">
-                  Pico em horário comercial: +25%
-                </div>
-              }
-              detailTitle="Consumo de Energia - Últimas 24 Horas"
-              detailContent={
-                <TimeSeriesChart
-                  data={historicalData}
-                  lines={[
-                    { dataKey: 'freezerEnergy', name: 'Congelador', color: '#3b82f6' },
-                    { dataKey: 'equipmentEnergy', name: 'Equipamentos', color: '#10b981' },
-                  ]}
-                  yAxisLabel="kW"
-                  height={350}
-                />
-              }
-            />
-            
-            <MetricCardWithChart
-              title="Pico de Ocupação"
-              value={peakOccupancy}
-              unit="%"
-              icon={Package}
-              subtitle="Máximo nas últimas 24h"
-              miniChartData={recentData}
-              miniChartDataKey="occupancy"
-              miniChartColor="#f59e0b"
-              miniChartType="line"
-              footer={
-                <div className="text-xs text-gray-600">
-                  Janela ideal: 6h-9h
-                </div>
-              }
-              detailTitle="Ocupação - Últimas 24 Horas"
-              detailContent={
-                <TimeSeriesChart
-                  data={historicalData}
-                  lines={[
-                    { dataKey: 'occupancy', name: 'Ocupação', color: '#f59e0b' },
-                  ]}
-                  yAxisLabel="%"
-                  height={350}
-                />
-              }
-            />
-            
-            <MetricCardWithChart
-              title="Horas Tarifa Baixa"
-              value={lowEnergyHours}
-              unit="h/dia"
-              icon={TrendingDown}
-              subtitle="Horário fora de pico"
-              miniChartData={energyPrices.slice(0, 12)}
-              miniChartDataKey="price"
-              miniChartColor="#10b981"
-              miniChartType="area"
-              footer={
-                <div className="text-xs text-gray-600">
-                  R$ 0,50/kWh (22h-6h)
-                </div>
-              }
-              detailTitle="Tarifas de Energia por Horário"
-              detailContent={
-                <div>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={energyPrices}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="hour" tickFormatter={(h) => `${h}h`} fontSize={12} />
-                      <YAxis label={{ value: 'R$/kWh', angle: -90, position: 'insideLeft' }} fontSize={12} />
-                      <Tooltip
-                        formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Tarifa']}
-                        labelFormatter={(h) => `${h}:00`}
-                      />
-                      <Bar dataKey="price" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                    <div className="p-2 bg-green-50 rounded text-center">
-                      <p className="text-green-600 font-medium">Fora de Pico</p>
-                      <p className="text-green-800 mt-1">R$ 0,50/kWh</p>
-                      <p className="text-gray-600">22h-6h</p>
-                    </div>
-                    <div className="p-2 bg-amber-50 rounded text-center">
-                      <p className="text-amber-600 font-medium">Intermediário</p>
-                      <p className="text-amber-800 mt-1">R$ 0,65/kWh</p>
-                      <p className="text-gray-600">6h-18h</p>
-                    </div>
-                    <div className="p-2 bg-red-50 rounded text-center">
-                      <p className="text-red-600 font-medium">Pico</p>
-                      <p className="text-red-800 mt-1">R$ 0,85/kWh</p>
-                      <p className="text-gray-600">18h-21h</p>
-                    </div>
-                  </div>
-                </div>
-              }
-            />
-            
-            <MetricCardWithChart
-              title="Próximo Horário Ideal"
-              value={energyPrices.find((p, i) => i > new Date().getHours() && p.price < 0.60)?.hour || '--'}
-              unit="h"
-              icon={Clock}
-              subtitle="Para operações de alta carga"
-              footer={
-                <div className="text-xs text-gray-600">
-                  Economia de até 40%
-                </div>
-              }
-            />
+        <DataSourceBanner
+          channel={channel}
+          isOnline={sync.isOnline}
+          dataSource={sync.dataSource}
+          sourceMessage={sync.sourceMessage}
+          lastApiAttempt={sync.lastApiAttempt}
+          lastSuccessfulApiSync={sync.lastSuccessfulApiSync}
+          lastDataTimestamp={sync.lastDataTimestamp}
+          backupSnapshotTimestamp={sync.backupSnapshotTimestamp}
+        />
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-slate-100 text-slate-800">
+                {sync.isUsingBackup ? 'Planejamento pelo backup' : 'Planejamento em cache local'}
+              </Badge>
+              <Badge variant="outline">Canal fixo: lab</Badge>
+              <Badge variant="outline">{currentPeriodLabel}</Badge>
+            </div>
+
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">
+                Indicadores de Planejamento
+              </h2>
+              <p className="text-sm text-gray-500">
+                KPIs e graficos consolidados a partir da serie real do periodo selecionado.
+              </p>
+            </div>
+
+            {(sync.error || logistics.error) && (
+              <p className="text-sm text-amber-700">{sync.error ?? logistics.error}</p>
+            )}
           </div>
+
+          <DashboardPeriodToolbar
+            period={selectedPeriod}
+            onPeriodChange={setSelectedPeriod}
+            onRefresh={sync.refreshNow}
+            isRefreshing={sync.isRefreshing}
+            pollingMode={sync.pollingMode}
+          />
         </div>
-        
-        {/* Gráficos Principais */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Previsão de Ocupação e Energia */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Previsão: Ocupação vs. Tarifa de Energia
-            </h3>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCardWithChart
+            title={`Consumo Medio (${currentPeriodLabel})`}
+            value={logistics.avgEnergy24h}
+            unit="kW"
+            icon={Zap}
+            subtitle="Media do consumo total no periodo selecionado"
+            miniChartData={periodSeries}
+            miniChartDataKey="totalEnergy"
+            miniChartColor="#3b82f6"
+            miniChartType="area"
+            footer={
+              <div className="text-xs text-gray-600">
+                Pico por hora consolidada: {highestEnergyHour?.hour ?? '--'}h ({highestEnergyHour?.value.toFixed(1) ?? '--'} kW)
+              </div>
+            }
+            detailTitle={`Consumo de Energia - ${currentPeriodLabel}`}
+            detailContent={
+              <TimeSeriesChart
+                data={periodSeries}
+                lines={[
+                  {
+                    dataKey: 'totalEnergy',
+                    name: 'Energia',
+                    color: '#3b82f6',
+                  },
+                ]}
+                yAxisLabel="kW"
+                height={350}
+                period={selectedPeriod}
+              />
+            }
+          />
+
+          <MetricCardWithChart
+            title={`Pico de Ocupacao (${currentPeriodLabel})`}
+            value={logistics.peakOccupancy}
+            unit="%"
+            icon={Package}
+            subtitle="Maior ocupacao derivada no periodo selecionado"
+            miniChartData={periodSeries}
+            miniChartDataKey="occupancy"
+            miniChartColor="#f59e0b"
+            miniChartType="line"
+            footer={
+              <div className="text-xs text-gray-600">
+                Pico consolidado: {peakHour?.hour ?? '--'}h
+              </div>
+            }
+            detailTitle={`Ocupacao - ${currentPeriodLabel}`}
+            detailContent={
+              <TimeSeriesChart
+                data={periodSeries}
+                lines={[
+                  {
+                    dataKey: 'occupancy',
+                    name: 'Ocupacao',
+                    color: '#f59e0b',
+                  },
+                ]}
+                yAxisLabel="%"
+                height={350}
+                period={selectedPeriod}
+              />
+            }
+          />
+
+          <MetricCardWithChart
+            title="Horas Tarifa Baixa"
+            value={String(logistics.lowEnergyHours)}
+            unit="h/dia"
+            icon={TrendingDown}
+            subtitle={`Tabela tarifaria aplicada ao planejamento de ${currentPeriodLabel.toLowerCase()}`}
+            miniChartData={logistics.energyPrices}
+            miniChartDataKey="price"
+            miniChartColor="#10b981"
+            miniChartType="area"
+            footer={
+              <div className="text-xs text-gray-600">Tarifa minima: R$ 0,50/kWh</div>
+            }
+            detailTitle="Tarifas de Energia por Horario"
+            detailContent={
+              <ResponsiveContainer width="100%" height={350}>
+                <ComposedChart data={logistics.energyPrices}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}h`} fontSize={12} />
+                  <YAxis
+                    label={{ value: 'R$/kWh', angle: -90, position: 'insideLeft' }}
+                    fontSize={12}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Tarifa']}
+                    labelFormatter={(hour) => `${hour}:00`}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke="#10b981"
+                    fill="#10b981"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            }
+          />
+
+          <MetricCardWithChart
+            title="Proximo Horario Ideal"
+            value={nextIdealValue}
+            unit={logistics.nextIdealHour === null ? undefined : 'h'}
+            icon={Clock}
+            subtitle="Janela futura com tarifa baixa com base no perfil observado"
+            miniChartData={logistics.occupancyForecast}
+            miniChartDataKey="occupancy"
+            miniChartColor="#8b5cf6"
+            miniChartType="line"
+            footer={
+              <div className="text-xs text-gray-600">
+                {nextIdealTariff === null
+                  ? 'Sem janela barata disponivel.'
+                  : `Tarifa prevista: R$ ${nextIdealTariff.toFixed(2)}/kWh`}
+              </div>
+            }
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ExpandableChartPanel
+            title="Energia vs Ocupacao"
+            subtitle={currentPeriodLabel}
+            detailTitle={`Energia vs Ocupacao - ${currentPeriodLabel}`}
+            detailContent={
+              <TimeSeriesChart
+                data={periodSeries}
+                lines={[
+                  {
+                    dataKey: 'totalEnergy',
+                    name: 'Energia',
+                    color: '#3b82f6',
+                  },
+                  {
+                    dataKey: 'occupancy',
+                    name: 'Ocupacao',
+                    color: '#f59e0b',
+                  },
+                ]}
+                height={360}
+                period={selectedPeriod}
+              />
+            }
+          >
+            <TimeSeriesChart
+              data={periodSeries}
+              lines={[
+                {
+                  dataKey: 'totalEnergy',
+                  name: 'Energia',
+                  color: '#3b82f6',
+                },
+                {
+                  dataKey: 'occupancy',
+                  name: 'Ocupacao',
+                  color: '#f59e0b',
+                },
+              ]}
+              height={240}
+              period={selectedPeriod}
+            />
+          </ExpandableChartPanel>
+
+          <ExpandableChartPanel
+            title="Perfil horario consolidado"
+            subtitle={currentPeriodLabel}
+            detailTitle={`Perfil horario consolidado - ${currentPeriodLabel}`}
+            detailContent={
+              <ResponsiveContainer width="100%" height={360}>
+                <ComposedChart data={logistics.hourlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}h`} fontSize={11} />
+                  <YAxis yAxisId="left" fontSize={11} />
+                  <YAxis yAxisId="right" orientation="right" fontSize={11} />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      name === 'Tarifa'
+                        ? [`R$ ${value.toFixed(2)}`, name]
+                        : name === 'Energia'
+                          ? [`${value.toFixed(1)} kW`, name]
+                          : [`${value.toFixed(1)}%`, name]
+                    }
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Area
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="tariff"
+                    name="Tarifa"
+                    fill="#fef3c7"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="avgEnergy"
+                    name="Energia"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="avgOccupancy"
+                    name="Ocupacao"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            }
+          >
             <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={occupancyForecast}>
+              <ComposedChart data={logistics.hourlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="hour" tickFormatter={(h) => `${h}h`} fontSize={11} />
+                <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}h`} fontSize={11} />
                 <YAxis yAxisId="left" fontSize={11} />
                 <YAxis yAxisId="right" orientation="right" fontSize={11} />
-                <Tooltip />
+                <Tooltip
+                  formatter={(value: number, name: string) =>
+                    name === 'Tarifa'
+                      ? [`R$ ${value.toFixed(2)}`, name]
+                      : name === 'Energia'
+                        ? [`${value.toFixed(1)} kW`, name]
+                        : [`${value.toFixed(1)}%`, name]
+                  }
+                />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Area
                   yAxisId="right"
                   type="monotone"
-                  dataKey="energyPrice"
+                  dataKey="tariff"
                   name="Tarifa"
                   fill="#fef3c7"
                   stroke="#f59e0b"
@@ -192,50 +472,52 @@ export default function LogisticsDashboard() {
                 <Line
                   yAxisId="left"
                   type="monotone"
-                  dataKey="occupancy"
-                  name="Ocupação"
+                  dataKey="avgEnergy"
+                  name="Energia"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="avgOccupancy"
+                  name="Ocupacao"
                   stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
-          
-          {/* Consumo vs Ocupação por Hora */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Consumo vs Ocupação (24h)
-            </h3>
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={hourlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="hour" tickFormatter={(h) => `${h}h`} fontSize={11} />
-                <YAxis yAxisId="left" fontSize={11} />
-                <YAxis yAxisId="right" orientation="right" fontSize={11} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Line yAxisId="left" dataKey="energy" name="Energia" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                <Line yAxisId="right" type="monotone" dataKey="occupancy" name="Ocupação" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          </ExpandableChartPanel>
         </div>
-        
-        {/* Insights */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-600 mb-1 font-medium">Insight - Consumo</p>
-            <p className="text-xs text-blue-900">
-              Consumo aumenta 25-30% durante horário comercial. Planeje manutenções preventivas durante madrugada.
-            </p>
-          </div>
-          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="text-xs text-amber-600 mb-1 font-medium">Insight - Estoque</p>
-            <p className="text-xs text-amber-900">
-              Ocupação ideal entre 6h-9h. Janela recomendada para recebimento coincide com tarifa intermediária.
-            </p>
-          </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {insights.map((insight) => (
+            <div
+              key={insight.title}
+              className={`rounded-lg border p-3 ${
+                insight.variant === 'blue'
+                  ? 'border-blue-200 bg-blue-50'
+                  : 'border-amber-200 bg-amber-50'
+              }`}
+            >
+              <p
+                className={`mb-1 text-xs font-medium ${
+                  insight.variant === 'blue' ? 'text-blue-600' : 'text-amber-600'
+                }`}
+              >
+                {insight.title}
+              </p>
+              <p
+                className={`text-xs ${
+                  insight.variant === 'blue' ? 'text-blue-900' : 'text-amber-900'
+                }`}
+              >
+                {insight.text}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </DashboardLayout>

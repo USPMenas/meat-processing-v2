@@ -1,0 +1,63 @@
+{
+  "channel": "lab",
+  "timestamp": "2026-03-31T11:40:56",
+  "sensorMap": {
+    "freezer": "fase3",
+    "equipment": [
+      "fase1",
+      "fase2"
+    ]
+  },
+  "source": {
+    "freezerMeasurement": {
+      "channel": "lab",
+      "sensor": "fase3",
+      "apparent_power": 7.6500701904296875,
+      "active_power": 5.811599254608154,
+      "reactive_power": 4.974825382232666,
+      "power_factor": 0.7596791982650757,
+      "current": 0.05956517904996872,
+      "voltage": 128.43191528320312,
+      "timestamp": "2026-03-31T11:40:56"
+    },
+    "equipmentMeasurements": [
+      {
+        "channel": "lab",
+        "sensor": "fase1",
+        "apparent_power": 5.79499626159668,
+        "active_power": 4.785167694091797,
+        "reactive_power": 3.268662214279175,
+        "power_factor": 0.8257412910461426,
+        "current": 0.04532184824347496,
+        "voltage": 127.86319732666016,
+        "timestamp": "2026-03-31T11:40:56"
+      },
+      {
+        "channel": "lab",
+        "sensor": "fase2",
+        "apparent_power": 4.928141117095947,
+        "active_power": 0.8854265809059143,
+        "reactive_power": 4.847947597503662,
+        "power_factor": 0.17966745793819427,
+        "current": 0.03817885369062424,
+        "voltage": 129.08038330078125,
+        "timestamp": "2026-03-31T11:40:56"
+      }
+    ]
+  },
+  "derived": {
+    "freezerEnergyKw": 5.8116,
+    "equipmentEnergyKw": 5.6706,
+    "equipmentCurrentA": 0.0835,
+    "temperatureC": -19.2,
+    "occupancyPct": 11,
+    "alerts": [
+      {
+        "type": "critical",
+        "code": "stale_data",
+        "message": "Ultima medicao disponivel em 2026-03-31T11:40:56; em 2026-04-07 isso nao pode ser exibido como dado ao vivo."
+      }
+    ],
+    "isStale": true
+  }
+}

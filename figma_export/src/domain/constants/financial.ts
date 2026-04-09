@@ -1,0 +1,5 @@
+export const FINANCIAL_CONFIG = Object.freeze({
+  REVENUE_PER_KWH: 8.5,
+  WORKING_HOURS_PER_DAY: 16,
+  DAYS_PER_MONTH: 30,
+});

@@ -1,0 +1,18 @@
+{
+  "name": "Frigorifico Monitor",
+  "short_name": "FrigoMonitor",
+  "description": "Dashboard PWA para monitoramento operacional, logistico e executivo de um frigorifico.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-04-07T11:44:29-03:00",
+  "api_base_url": "https://bor.gs/tcc",
+  "files": [
+    "channel-lab-1min.json",
+    "sensor-lab-fase1-1min.json",
+    "channel-lab-default-empty-24h.json",
+    "consumption-lab-1d.json",
+    "consumption-lab-default-empty-24h.json",
+    "demand-peaks-lab-1d.json",
+    "electrical-health-lab-1d.json",
+    "hourly-profile-lab-7d.json",
+    "current-by-sensor-lab-7d.json",
+    "voltage-anomalies-lab-120-132-127.json",
+    "error-invalid-from-time-400.json",
+    "useOperationalData-example.json"
+  ]
+}

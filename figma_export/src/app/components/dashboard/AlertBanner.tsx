@@ -1,5 +1,5 @@
 import { AlertTriangle, Info, XCircle } from 'lucide-react';
-import { Alert } from '../../utils/mockData';
+import type { Alert } from '../../../domain/types';
 
 interface AlertBannerProps {
   alerts: Alert[];

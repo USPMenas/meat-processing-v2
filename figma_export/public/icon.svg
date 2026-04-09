@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>Frigorífico Monitor</title>
+  <rect width="256" height="256" rx="56" fill="#2563eb" />
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="14">
+    <path d="M128 46v164" />
+    <path d="M76 76l104 104" />
+    <path d="M76 180L180 76" />
+    <path d="M46 128h164" />
+    <path d="M128 46l-16 24" />
+    <path d="M128 46l16 24" />
+    <path d="M128 210l-16-24" />
+    <path d="M128 210l16-24" />
+    <path d="M46 128l24-16" />
+    <path d="M46 128l24 16" />
+    <path d="M210 128l-24-16" />
+    <path d="M210 128l-24 16" />
+  </g>
+</svg>

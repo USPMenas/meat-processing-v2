@@ -1,0 +1,22 @@
+{
+  "channel": "lab",
+  "from": "2026-03-30T00:00:00",
+  "to": "2026-03-31T00:00:00",
+  "results": [
+    {
+      "sensor": "fase1",
+      "avg_voltage": 128.5,
+      "avg_power_factor": 0.838
+    },
+    {
+      "sensor": "fase2",
+      "avg_voltage": 129.7,
+      "avg_power_factor": 0.299
+    },
+    {
+      "sensor": "fase3",
+      "avg_voltage": 129.3,
+      "avg_power_factor": 0.751
+    }
+  ]
+}

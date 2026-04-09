@@ -1,7 +1,9 @@
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
+type ChartPoint = object;
+
 interface MiniChartProps {
-  data: any[];
+  data: ChartPoint[];
   dataKey: string;
   color: string;
   type?: 'line' | 'area';
