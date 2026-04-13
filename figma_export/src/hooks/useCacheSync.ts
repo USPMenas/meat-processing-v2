@@ -8,6 +8,7 @@ import {
 import { SyncStrategy } from '../services/cache/syncStrategy';
 import { PollingManager } from '../services/polling/pollingManager';
 import type {
+  BackupSnapshotStatus,
   MeasurementDataSource,
   PollingMode,
 } from '../services/cache/types';
@@ -26,10 +27,37 @@ function getIntervalForMode(mode: PollingMode): number {
     : API_CONFIG.pollingIntervalMs;
 }
 
+function hasUsableSyncData(
+  syncState: ReturnType<typeof getCachedMeasurementSyncState>,
+  cachedMeasurements: ReturnType<typeof getCachedMeasurements>,
+): boolean {
+  if (syncState?.status === 'empty') {
+    return false;
+  }
+
+  return Boolean(
+    syncState?.latestMeasurementAt ?? cachedMeasurements[cachedMeasurements.length - 1]?.timestamp,
+  );
+}
+
+function isApiFresh(
+  syncState: ReturnType<typeof getCachedMeasurementSyncState>,
+): boolean {
+  if (!syncState) {
+    return false;
+  }
+
+  return (
+    syncState.status === 'fresh' &&
+    (syncState.dataSource === 'api' || syncState.dataSource === 'hybrid')
+  );
+}
+
 function getSyncOutcome(channel: string): SyncOutcome {
   const syncState = getCachedMeasurementSyncState(channel);
+  const cachedMeasurements = getCachedMeasurements(channel);
 
-  if (syncState?.dataSource === 'api' && syncState.status === 'fresh') {
+  if (hasUsableSyncData(syncState, cachedMeasurements)) {
     return 'success';
   }
 
@@ -45,6 +73,13 @@ export function useCacheSync(channel: string): {
   lastSuccessfulApiSync: Date | null;
   lastDataTimestamp: Date | null;
   backupSnapshotTimestamp: Date | null;
+  backupSnapshotStatus: BackupSnapshotStatus | null;
+  backupRefreshAttemptedAt: Date | null;
+  backupRefreshFinishedAt: Date | null;
+  backupRefreshDurationMs: number | null;
+  backupRefreshError: string | null;
+  backupSnapshotAgeHours: number | null;
+  isBackupSnapshotFreshEnough: boolean | null;
   dataSource: MeasurementDataSource;
   isUsingBackup: boolean;
   sourceMessage: string | null;
@@ -68,6 +103,13 @@ export function useCacheSync(channel: string): {
     lastSuccessfulApiSync: null as Date | null,
     lastDataTimestamp: null as Date | null,
     backupSnapshotTimestamp: null as Date | null,
+    backupSnapshotStatus: null as BackupSnapshotStatus | null,
+    backupRefreshAttemptedAt: null as Date | null,
+    backupRefreshFinishedAt: null as Date | null,
+    backupRefreshDurationMs: null as number | null,
+    backupRefreshError: null as string | null,
+    backupSnapshotAgeHours: null as number | null,
+    isBackupSnapshotFreshEnough: null as boolean | null,
     dataSource: 'api' as MeasurementDataSource,
     isUsingBackup: false,
     sourceMessage: null as string | null,
@@ -114,14 +156,17 @@ export function useCacheSync(channel: string): {
     const syncStateToViewState = (fallbackError: string | null): SyncOutcome => {
       const syncState = getCachedMeasurementSyncState(channel);
       const cachedMeasurements = getCachedMeasurements(channel);
+      const hasUsableData = hasUsableSyncData(syncState, cachedMeasurements);
       const lastMeasurementAt =
         syncState?.latestMeasurementAt ??
         cachedMeasurements[cachedMeasurements.length - 1]?.timestamp ??
         null;
       const outcome = getSyncOutcome(channel);
       const isUsingBackup = syncState?.dataSource === 'backup';
-      const isOnline =
-        syncState?.dataSource === 'api' && syncState.status === 'fresh';
+      const isOnline = isApiFresh(syncState);
+      const errorMessage = hasUsableData
+        ? null
+        : fallbackError ?? syncState?.message ?? null;
 
       if (!cancelled) {
         setState((previous) => ({
@@ -144,20 +189,35 @@ export function useCacheSync(channel: string): {
           backupSnapshotTimestamp: syncState?.backupSnapshotGeneratedAt
             ? new Date(syncState.backupSnapshotGeneratedAt)
             : previous.backupSnapshotTimestamp,
+          backupSnapshotStatus:
+            syncState?.backupSnapshotStatus ?? previous.backupSnapshotStatus,
+          backupRefreshAttemptedAt: syncState?.backupRefreshAttemptedAt
+            ? new Date(syncState.backupRefreshAttemptedAt)
+            : previous.backupRefreshAttemptedAt,
+          backupRefreshFinishedAt: syncState?.backupRefreshFinishedAt
+            ? new Date(syncState.backupRefreshFinishedAt)
+            : previous.backupRefreshFinishedAt,
+          backupRefreshDurationMs:
+            syncState?.backupRefreshDurationMs ?? previous.backupRefreshDurationMs,
+          backupRefreshError:
+            syncState?.backupRefreshError ?? previous.backupRefreshError,
+          backupSnapshotAgeHours:
+            syncState?.backupSnapshotAgeHours ?? previous.backupSnapshotAgeHours,
+          isBackupSnapshotFreshEnough:
+            syncState?.isBackupSnapshotFreshEnough ??
+            previous.isBackupSnapshotFreshEnough,
           dataSource: syncState?.dataSource ?? previous.dataSource,
           isUsingBackup,
-          sourceMessage: syncState?.message ?? previous.sourceMessage,
+          sourceMessage:
+            syncState?.message ??
+            (hasUsableData ? previous.sourceMessage : fallbackError) ??
+            previous.sourceMessage,
           progress: previous.progress === 0 ? 100 : previous.progress,
-          error:
-            fallbackError ??
-            (outcome === 'success' ? null : syncState?.message ?? previous.error),
+          error: errorMessage,
           canRetry:
             pollingModeRef.current === 'paused' ||
-            isUsingBackup ||
-            Boolean(
-              fallbackError ??
-                (outcome === 'success' ? null : syncState?.message ?? previous.error),
-            ),
+            !hasUsableData ||
+            Boolean(errorMessage),
         }));
       }
 

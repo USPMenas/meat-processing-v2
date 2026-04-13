@@ -23,20 +23,18 @@ interface DiscoveryOptions {
   now?: () => Date;
   channelCandidates?: readonly string[];
   ttlMs?: number;
-  probeOffsetsDays?: readonly number[];
-  probeWindowHours?: number;
+  probeOffsetsMinutes?: readonly number[];
+  probeWindowMinutes?: number;
 }
 
-function addHours(date: Date, hours: number): Date {
+function addMinutes(date: Date, minutes: number): Date {
   const next = new Date(date);
-  next.setHours(next.getHours() + hours);
+  next.setMinutes(next.getMinutes() + minutes);
   return next;
 }
 
-function subtractDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() - days);
-  return next;
+function subtractMinutes(date: Date, minutes: number): Date {
+  return addMinutes(date, -minutes);
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -53,10 +51,10 @@ export async function discoverChannelsAndSensors(
   const backupManifestLoader = options.backupManifestLoader ?? loadBackupManifest;
   const now = options.now ?? (() => new Date());
   const ttlMs = options.ttlMs ?? DISCOVERY_TTL_MS;
-  const probeOffsetsDays =
-    options.probeOffsetsDays ?? API_CONFIG.staleFallbackProbeOffsetsDays;
-  const probeWindowHours =
-    options.probeWindowHours ?? API_CONFIG.staleFallbackProbeWindowHours;
+  const probeOffsetsMinutes =
+    options.probeOffsetsMinutes ?? API_CONFIG.staleFallbackProbeOffsetsMinutes;
+  const probeWindowMinutes =
+    options.probeWindowMinutes ?? API_CONFIG.staleFallbackProbeWindowMinutes;
 
   if (!manager.isExpired(DISCOVERY_CACHE_KEY, ttlMs)) {
     const cached = manager.get<DiscoveryResult>(DISCOVERY_CACHE_KEY)?.data;
@@ -74,10 +72,10 @@ export async function discoverChannelsAndSensors(
   let hadProbeError = false;
 
   for (const channel of channelCandidates) {
-    for (const offsetDays of probeOffsetsDays) {
+    for (const offsetMinutes of probeOffsetsMinutes) {
       try {
-        const probeStart = subtractDays(now(), offsetDays);
-        const probeEnd = addHours(probeStart, probeWindowHours);
+        const probeEnd = subtractMinutes(now(), offsetMinutes);
+        const probeStart = subtractMinutes(probeEnd, probeWindowMinutes);
         const response = await endpoints.getChannelMeasurements(
           channel,
           probeStart.toISOString(),
@@ -96,7 +94,7 @@ export async function discoverChannelsAndSensors(
       } catch (error) {
         hadProbeError = true;
         console.error(
-          `[Discovery] Failed to probe channel "${channel}" for offset ${offsetDays}d`,
+          `[Discovery] Failed to probe channel "${channel}" for offset ${offsetMinutes}m`,
           error,
         );
       }

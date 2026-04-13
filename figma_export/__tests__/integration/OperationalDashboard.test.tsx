@@ -15,6 +15,13 @@ function buildCacheSyncMock(overrides: Partial<ReturnType<typeof cacheSyncHooks.
     lastSuccessfulApiSync: new Date('2026-04-08T12:00:30.000Z'),
     lastDataTimestamp: new Date('2026-03-31T11:40:56.000Z'),
     backupSnapshotTimestamp: null,
+    backupSnapshotStatus: null,
+    backupRefreshAttemptedAt: null,
+    backupRefreshFinishedAt: null,
+    backupRefreshDurationMs: null,
+    backupRefreshError: null,
+    backupSnapshotAgeHours: null,
+    isBackupSnapshotFreshEnough: null,
     dataSource: 'api' as const,
     isUsingBackup: false,
     sourceMessage: null,
@@ -212,7 +219,7 @@ describe('OperationalDashboard integration', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Usando backup SQLite/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Backup ativo/i)).toBeInTheDocument();
     expect(screen.getByText(/Snapshot do backup/i)).toBeInTheDocument();
     expect(screen.getAllByText(/31\/03\/2026/i).length).toBeGreaterThan(0);
   });

@@ -226,13 +226,21 @@ export default function BusinessDashboard() {
           lastSuccessfulApiSync={sync.lastSuccessfulApiSync}
           lastDataTimestamp={sync.lastDataTimestamp}
           backupSnapshotTimestamp={sync.backupSnapshotTimestamp}
+          backupSnapshotStatus={sync.backupSnapshotStatus}
+          backupRefreshError={sync.backupRefreshError}
+          backupSnapshotAgeHours={sync.backupSnapshotAgeHours}
+          isBackupSnapshotFreshEnough={sync.isBackupSnapshotFreshEnough}
         />
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-slate-100 text-slate-800">
-                {sync.isUsingBackup ? 'Modelo via backup' : 'Modelo via API/cache'}
+                {sync.isUsingBackup
+                  ? 'Modelo via backup'
+                  : sync.dataSource === 'hybrid'
+                    ? 'Modelo hibrido'
+                    : 'Modelo via API/cache'}
               </Badge>
               <Badge variant="outline">Canal fixo: lab</Badge>
               <Badge variant="outline">{currentPeriodLabel}</Badge>

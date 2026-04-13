@@ -8,23 +8,25 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-Object.defineProperty(window, 'ResizeObserver', {
-  writable: true,
-  configurable: true,
-  value: ResizeObserverMock,
-});
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'ResizeObserver', {
+    writable: true,
+    configurable: true,
+    value: ResizeObserverMock,
+  });
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  configurable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    dispatchEvent: () => false,
-  }),
-});
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+}

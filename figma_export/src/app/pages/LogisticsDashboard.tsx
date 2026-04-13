@@ -186,13 +186,21 @@ export default function LogisticsDashboard() {
           lastSuccessfulApiSync={sync.lastSuccessfulApiSync}
           lastDataTimestamp={sync.lastDataTimestamp}
           backupSnapshotTimestamp={sync.backupSnapshotTimestamp}
+          backupSnapshotStatus={sync.backupSnapshotStatus}
+          backupRefreshError={sync.backupRefreshError}
+          backupSnapshotAgeHours={sync.backupSnapshotAgeHours}
+          isBackupSnapshotFreshEnough={sync.isBackupSnapshotFreshEnough}
         />
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-slate-100 text-slate-800">
-                {sync.isUsingBackup ? 'Planejamento pelo backup' : 'Planejamento em cache local'}
+                {sync.isUsingBackup
+                  ? 'Planejamento pelo backup'
+                  : sync.dataSource === 'hybrid'
+                    ? 'Planejamento hibrido'
+                    : 'Planejamento em cache local'}
               </Badge>
               <Badge variant="outline">Canal fixo: lab</Badge>
               <Badge variant="outline">{currentPeriodLabel}</Badge>

@@ -108,6 +108,7 @@ export default function OperationalDashboard() {
   const history = useOperationalHistory(channel, selectedPeriod);
   const chartSeries = history.data.length > 0 ? history.data : realtime.historical;
   const currentData = realtime.data ?? chartSeries[chartSeries.length - 1] ?? null;
+  const isHybrid = sync.dataSource === 'hybrid';
   const totalEnergySeries = chartSeries.map((entry) => ({
     ...entry,
     totalEnergy: entry.freezerEnergy + entry.equipmentEnergy,
@@ -119,9 +120,20 @@ export default function OperationalDashboard() {
   const hasData = Boolean(currentData) || chartSeries.length > 0;
   const freshnessLabel = sync.isUsingBackup
     ? `Dados do backup (${formatAge(lastMeasurementAt)})`
+    : isHybrid
+      ? realtime.isStale
+        ? `Base renovada + delta atrasado (${formatAge(lastMeasurementAt)})`
+        : 'Base renovada + delta recente'
     : realtime.isStale
       ? `Dados desatualizados (${formatAge(lastMeasurementAt)})`
       : 'Dados ao vivo';
+  const freshnessBadgeClass = sync.isUsingBackup
+    ? 'bg-amber-100 text-amber-800'
+    : isHybrid
+      ? 'bg-blue-100 text-blue-800'
+      : realtime.isStale
+        ? 'bg-amber-100 text-amber-800'
+        : 'bg-emerald-100 text-emerald-800';
   const averages = useMemo(() => {
     if (chartSeries.length === 0) {
       return {
@@ -244,21 +256,21 @@ export default function OperationalDashboard() {
           lastSuccessfulApiSync={sync.lastSuccessfulApiSync}
           lastDataTimestamp={sync.lastDataTimestamp ?? lastMeasurementAt}
           backupSnapshotTimestamp={sync.backupSnapshotTimestamp}
+          backupSnapshotStatus={sync.backupSnapshotStatus}
+          backupRefreshError={sync.backupRefreshError}
+          backupSnapshotAgeHours={sync.backupSnapshotAgeHours}
+          isBackupSnapshotFreshEnough={sync.isBackupSnapshotFreshEnough}
         />
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
-                className={
-                  realtime.isStale || sync.isUsingBackup
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-emerald-100 text-emerald-800'
-                }
+                className={freshnessBadgeClass}
               >
                 <Activity
                   className={`size-3.5 ${
-                    realtime.isStale || sync.isUsingBackup ? '' : 'animate-pulse'
+                    sync.isOnline && !realtime.isStale ? 'animate-pulse' : ''
                   }`}
                 />
                 {freshnessLabel}

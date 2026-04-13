@@ -15,6 +15,33 @@ let pollingActive = false;
 let syncState: MeasurementSyncState | null = null;
 let cachedMeasurements: Array<{ timestamp: string }> = [];
 
+function createSyncState(
+  overrides: Partial<MeasurementSyncState> = {},
+): MeasurementSyncState {
+  return {
+    channel: 'lab',
+    status: 'fresh',
+    dataSource: 'api',
+    latestMeasurementAt: '2026-04-10T09:42:07',
+    lastFallbackCheckAt: null,
+    lastApiAttemptAt: '2026-04-10T09:42:30.000Z',
+    lastSuccessfulApiSyncAt: '2026-04-10T09:42:30.000Z',
+    backupSnapshotGeneratedAt: null,
+    backupSnapshotStatus: null,
+    backupRefreshAttemptedAt: null,
+    backupRefreshFinishedAt: null,
+    backupRefreshDurationMs: null,
+    backupRefreshError: null,
+    backupSnapshotAgeHours: null,
+    isBackupSnapshotFreshEnough: null,
+    recentAnchorAt: '2026-04-10T09:42:07',
+    recentWindowFrom: '2026-04-10T09:12:07',
+    recentWindowTo: '2026-04-10T09:42:07',
+    message: null,
+    ...overrides,
+  };
+}
+
 vi.mock('@/services/cache/cacheSelectors', () => ({
   getCachedMeasurementSyncState: vi.fn(() => syncState),
   getCachedMeasurements: vi.fn(() => cachedMeasurements),
@@ -47,53 +74,35 @@ describe('useCacheSync', () => {
     vi.clearAllMocks();
     pollingCallback = null;
     pollingActive = false;
-    cachedMeasurements = [{ timestamp: '2026-03-31T11:40:56' }];
-    syncState = {
-      channel: 'lab',
-      status: 'fresh',
-      dataSource: 'api',
-      latestMeasurementAt: '2026-03-31T11:40:56',
-      lastFallbackCheckAt: null,
-      lastApiAttemptAt: '2026-04-09T12:00:00.000Z',
-      lastSuccessfulApiSyncAt: '2026-04-09T12:00:00.000Z',
-      backupSnapshotGeneratedAt: null,
-      message: null,
-    };
+    cachedMeasurements = [{ timestamp: '2026-04-10T09:42:07' }];
+    syncState = createSyncState();
     needsColdStartMock.mockReturnValue(false);
     coldStartMock.mockResolvedValue(undefined);
   });
 
-  it('keeps the normal cadence on success, degrades after a failure, pauses after a second failure and restarts on manual refresh', async () => {
-    let mode: 'success' | 'failure' = 'success';
-
+  it('keeps normal polling when a failed delta still leaves a usable backup snapshot', async () => {
     syncDeltaMock.mockImplementation(async () => {
-      if (mode === 'success') {
-        syncState = {
-          channel: 'lab',
-          status: 'fresh',
-          dataSource: 'api',
-          latestMeasurementAt: '2026-03-31T11:40:56',
-          lastFallbackCheckAt: null,
-          lastApiAttemptAt: '2026-04-09T12:00:00.000Z',
-          lastSuccessfulApiSyncAt: '2026-04-09T12:00:00.000Z',
-          backupSnapshotGeneratedAt: null,
-          message: null,
-        };
-        return;
-      }
-
-      syncState = {
-        channel: 'lab',
+      syncState = createSyncState({
         status: 'backup',
         dataSource: 'backup',
-        latestMeasurementAt: '2026-03-31T11:40:56',
-        lastFallbackCheckAt: null,
-        lastApiAttemptAt: '2026-04-09T12:05:00.000Z',
-        lastSuccessfulApiSyncAt: '2026-04-09T12:00:00.000Z',
-        backupSnapshotGeneratedAt: '2026-04-09T11:55:00.000Z',
-        message: 'API indisponivel; usando backup.',
-      };
-      throw new Error('API indisponivel');
+        latestMeasurementAt: '2026-03-31T10:24:17',
+        lastApiAttemptAt: '2026-04-10T09:43:30.000Z',
+        lastSuccessfulApiSyncAt: '2026-04-10T09:42:30.000Z',
+        backupSnapshotGeneratedAt: '2026-04-10T09:41:00.000Z',
+        backupSnapshotStatus: 'last_good',
+        backupRefreshAttemptedAt: '2026-04-10T09:43:00.000Z',
+        backupRefreshFinishedAt: '2026-04-10T09:43:02.000Z',
+        backupRefreshDurationMs: 2000,
+        backupRefreshError: 'offline',
+        backupSnapshotAgeHours: 240,
+        isBackupSnapshotFreshEnough: false,
+        recentAnchorAt: null,
+        recentWindowFrom: null,
+        recentWindowTo: null,
+        message: 'Usando o ultimo snapshot bom enquanto a API procura dados novos.',
+      });
+      cachedMeasurements = [{ timestamp: '2026-03-31T10:24:17' }];
+      throw new Error('Internal route returned 500');
     });
 
     const { result } = renderHook(() => useCacheSync('lab'));
@@ -102,16 +111,29 @@ describe('useCacheSync', () => {
       expect(result.current.pollingMode).toBe('normal');
     });
 
-    expect(startMock).toHaveBeenCalledWith(expect.any(Function), 60_000);
-    expect(result.current.canRetry).toBe(false);
-
-    mode = 'failure';
     await act(async () => {
       await pollingCallback?.();
     });
 
-    expect(result.current.pollingMode).toBe('degraded');
-    expect(updateIntervalMock).toHaveBeenLastCalledWith(300_000);
+    expect(result.current.pollingMode).toBe('normal');
+    expect(result.current.isUsingBackup).toBe(true);
+    expect(result.current.isOnline).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.sourceMessage).toContain('ultimo snapshot bom');
+    expect(startMock).toHaveBeenCalledWith(expect.any(Function), 60_000);
+    expect(updateIntervalMock).not.toHaveBeenCalledWith(300_000);
+  });
+
+  it('degrades and pauses only when sync failures leave no usable data in cache', async () => {
+    cachedMeasurements = [];
+    syncState = null;
+    syncDeltaMock.mockRejectedValue(new Error('No data available'));
+
+    const { result } = renderHook(() => useCacheSync('lab'));
+
+    await waitFor(() => {
+      expect(result.current.pollingMode).toBe('degraded');
+    });
 
     await act(async () => {
       await pollingCallback?.();
@@ -119,14 +141,7 @@ describe('useCacheSync', () => {
 
     expect(result.current.pollingMode).toBe('paused');
     expect(result.current.canRetry).toBe(true);
+    expect(result.current.error).toContain('No data available');
     expect(stopMock).toHaveBeenCalled();
-
-    mode = 'success';
-    await act(async () => {
-      await result.current.refreshNow();
-    });
-
-    expect(result.current.pollingMode).toBe('normal');
-    expect(startMock).toHaveBeenLastCalledWith(expect.any(Function), 60_000);
   });
 });

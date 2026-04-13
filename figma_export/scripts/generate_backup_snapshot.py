@@ -15,9 +15,14 @@ FREEZER_SENSORS = {"fase3"}
 EQUIPMENT_SENSORS = {"fase1", "fase2"}
 RECENT_WINDOW_HOURS = 2
 PERIOD_CONFIG = {
-    "24h": {"hours": 24, "bucket_minutes": 15},
-    "7d": {"hours": 7 * 24, "bucket_minutes": 60},
-    "30d": {"hours": 30 * 24, "bucket_minutes": 360},
+    "24h": {"hours": 24, "bucket_minutes": 15, "mode": "rolling"},
+    "7d": {"hours": 7 * 24, "bucket_minutes": 24 * 60, "mode": "day", "days": 7},
+    "30d": {
+        "hours": 30 * 24,
+        "bucket_minutes": 24 * 60,
+        "mode": "day",
+        "days": 30,
+    },
 }
 TEMPERATURE_CONFIG = {
     "baseTemperature": -18.0,
@@ -119,6 +124,10 @@ def floor_bucket(start: datetime, current: datetime, bucket_minutes: int) -> dat
     return start + timedelta(minutes=bucket_index * bucket_minutes)
 
 
+def start_of_day(value: datetime) -> datetime:
+    return datetime(value.year, value.month, value.day)
+
+
 def row_from_tuple(row: tuple[Any, ...]) -> MeasurementRow:
     return MeasurementRow(
         channel=row[0],
@@ -183,7 +192,14 @@ def build_bucketed_history(
         period: {} for period in PERIOD_CONFIG
     }
     recent_map: dict[str, dict[str, MeasurementRow]] = {}
-    start_30d = latest_dt - timedelta(hours=PERIOD_CONFIG["30d"]["hours"])
+    latest_day = start_of_day(latest_dt)
+    period_starts = {
+        period: latest_day - timedelta(days=config["days"] - 1)
+        if config.get("mode") == "day"
+        else latest_dt - timedelta(hours=config["hours"])
+        for period, config in PERIOD_CONFIG.items()
+    }
+    start_30d = period_starts["30d"]
     recent_start = latest_dt - timedelta(hours=RECENT_WINDOW_HOURS)
 
     cursor = connection.execute(
@@ -206,10 +222,14 @@ def build_bucketed_history(
             recent_map.setdefault(isoformat(recent_bucket), {})[row.sensor] = row
 
         for period, config in PERIOD_CONFIG.items():
-            period_start = latest_dt - timedelta(hours=config["hours"])
+            period_start = period_starts[period]
             if timestamp_dt < period_start:
                 continue
-            bucket = floor_bucket(period_start, timestamp_dt, config["bucket_minutes"])
+            bucket = (
+                start_of_day(timestamp_dt)
+                if config.get("mode") == "day"
+                else floor_bucket(period_start, timestamp_dt, config["bucket_minutes"])
+            )
             history_maps[period].setdefault(isoformat(bucket), {})[row.sensor] = row
 
     recent_measurements = [
@@ -435,7 +455,7 @@ def build_snapshot(connection: sqlite3.Connection, db_name: str) -> tuple[dict[s
     ]
     latest_dt = parse_timestamp(measurement_range[1])
     generated_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    start_30d = latest_dt - timedelta(hours=PERIOD_CONFIG["30d"]["hours"])
+    start_30d = start_of_day(latest_dt) - timedelta(days=PERIOD_CONFIG["30d"]["days"] - 1)
     recent_measurements, histories = build_bucketed_history(connection, latest_dt)
     snapshot = {
         "channel": CHANNEL,

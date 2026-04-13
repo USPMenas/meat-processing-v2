@@ -14,6 +14,13 @@ function buildCacheSyncMock(overrides: Partial<ReturnType<typeof cacheSyncHooks.
     lastSuccessfulApiSync: new Date('2026-04-08T12:00:30.000Z'),
     lastDataTimestamp: new Date('2026-03-31T10:24:17.000Z'),
     backupSnapshotTimestamp: null,
+    backupSnapshotStatus: null,
+    backupRefreshAttemptedAt: null,
+    backupRefreshFinishedAt: null,
+    backupRefreshDurationMs: null,
+    backupRefreshError: null,
+    backupSnapshotAgeHours: null,
+    isBackupSnapshotFreshEnough: null,
     dataSource: 'api' as const,
     isUsingBackup: false,
     sourceMessage: null,
@@ -95,7 +102,7 @@ describe('LogisticsDashboard integration', () => {
     expect(screen.getByText(/Energia vs Ocupacao/i)).toBeInTheDocument();
     expect(screen.getByText(/Perfil horario consolidado/i)).toBeInTheDocument();
     expect(screen.getByText(/Insight - Consumo/i)).toBeInTheDocument();
-    expect(screen.getByText(/Dados vindos da API/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dados recentes da API/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /Expandir Energia vs Ocupacao/i }),
     ).toBeInTheDocument();
@@ -193,7 +200,7 @@ describe('LogisticsDashboard integration', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText(/Usando backup SQLite/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Backup ativo/i)).toBeInTheDocument();
     expect(screen.getByText(/Planejamento pelo backup/i)).toBeInTheDocument();
   });
 });

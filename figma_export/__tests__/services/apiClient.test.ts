@@ -8,6 +8,7 @@ describe('ApiClient', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('returns parsed JSON when the request succeeds', async () => {
@@ -22,6 +23,50 @@ describe('ApiClient', () => {
 
     await expect(client.get<{ ok: boolean }>('/metrics')).resolves.toEqual({ ok: true });
     expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('joins internal base URLs without dropping the internal path segment', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const client = new ApiClient({
+      baseUrl: '/internal/',
+      fetchFn,
+      retryDelaysMs: [],
+    });
+
+    await client.get('/recent/lab');
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.stringContaining('/internal/recent/lab'),
+      expect.any(Object),
+    );
+  });
+
+  it('calls the global fetch through a safe wrapper instead of reusing it as a method', async () => {
+    const contexts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(function wrappedFetch(this: unknown) {
+        contexts.push(this);
+
+        if (this && this !== globalThis) {
+          throw new Error('Illegal invocation');
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        );
+      }),
+    );
+
+    const client = new ApiClient({
+      baseUrl: 'https://api.example.com',
+      retryDelaysMs: [],
+    });
+
+    await expect(client.get<{ ok: boolean }>('/metrics')).resolves.toEqual({ ok: true });
+    expect(contexts).toHaveLength(1);
   });
 
   it('retries with exponential backoff and eventually succeeds', async () => {

@@ -102,7 +102,7 @@ describe('discoverChannelsAndSensors', () => {
       endpoints: createDiscoveryEndpoints(getChannelMeasurements),
       cacheManager,
       channelCandidates: ['lab', 'mock01'],
-      probeOffsetsDays: [1],
+      probeOffsetsMinutes: [1440],
       now: () => new Date('2026-04-07T12:00:00.000Z'),
     });
 
@@ -117,7 +117,7 @@ describe('discoverChannelsAndSensors', () => {
       endpoints: createDiscoveryEndpoints(getChannelMeasurements),
       cacheManager,
       channelCandidates: ['lab', 'mock01'],
-      probeOffsetsDays: [1],
+      probeOffsetsMinutes: [1440],
       now: () => new Date('2026-04-07T12:05:00.000Z'),
     });
 
@@ -154,7 +154,7 @@ describe('discoverChannelsAndSensors', () => {
         ],
       }),
       channelCandidates: ['lab', 'mock01'],
-      probeOffsetsDays: [1],
+      probeOffsetsMinutes: [1440],
       now: () => new Date('2026-04-07T12:00:00.000Z'),
     });
 

@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/index.mjs --dev",
     "build": "tsc --noEmit && vite build",
+    "start": "node server/index.mjs",
     "lint": "eslint .",
     "generate:backup-snapshot": "python scripts/generate_backup_snapshot.py",
     "test": "vitest run",

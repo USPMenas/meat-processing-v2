@@ -29,6 +29,26 @@ function defaultSleep(ms: number): Promise<void> {
   });
 }
 
+function resolveBaseUrl(baseUrl: string): string {
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  }
+
+  if (typeof window === 'undefined') {
+    return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  }
+
+  return new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`, window.location.origin)
+    .toString();
+}
+
+function buildRequestUrl(baseUrl: string, endpoint: string): URL {
+  const resolvedBase = resolveBaseUrl(baseUrl);
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+
+  return new URL(normalizedEndpoint, resolvedBase);
+}
+
 function shouldRetry(
   error: ApiError,
   attempt: number,
@@ -76,12 +96,12 @@ export class ApiClient {
     this.baseUrl = options.baseUrl ?? API_CONFIG.baseUrl;
     this.timeout = options.timeout ?? API_CONFIG.timeoutMs;
     this.retryDelaysMs = options.retryDelaysMs ?? API_CONFIG.retryDelaysMs;
-    this.fetchFn = options.fetchFn ?? fetch;
+    this.fetchFn = options.fetchFn ?? ((input, init) => fetch(input, init));
     this.sleep = options.sleep ?? defaultSleep;
   }
 
   async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
-    const url = new URL(endpoint, this.baseUrl);
+    const url = buildRequestUrl(this.baseUrl, endpoint);
 
     if (params) {
       Object.entries(params).forEach(([key, value]) => {

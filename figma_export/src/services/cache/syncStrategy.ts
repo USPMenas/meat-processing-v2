@@ -1,6 +1,9 @@
 import { API_CONFIG } from '../../config/api';
 import { SENSOR_MAP } from '../../config/channels';
-import { DEFAULT_OCCUPANCY_CONFIG, DEFAULT_TEMPERATURE_CONFIG } from '../../domain/constants/dashboard';
+import {
+  DEFAULT_OCCUPANCY_CONFIG,
+  DEFAULT_TEMPERATURE_CONFIG,
+} from '../../domain/constants/dashboard';
 import { buildOperationalSeries } from '../../domain/transformers/operationalSeriesTransformer';
 import type {
   BackupChannelSnapshot,
@@ -9,31 +12,40 @@ import type {
   OperationalHistoryPoint,
 } from '../../domain/types';
 import { parseApiTimestamp } from '../api/timestamps';
-import { apiEndpoints, type ApiEndpoints } from '../api/endpoints';
-import type { AnalyticsResponseMap, AnalyticsType, ApiMeasurement } from '../api/types';
+import type { ApiMeasurement, AnalyticsType } from '../api/types';
 import { loadBackupSnapshot } from '../backup/snapshot';
-import { cacheManager, type CacheManager } from './cacheManager';
+import { runtimeEndpoints, type RuntimeEndpoints } from '../runtime/endpoints';
+import type {
+  BootstrapResponse,
+  DailyHistorySample,
+  HistoryResponse,
+  RecentResponse,
+} from '../runtime/types';
+import { cacheManager, type CacheEntry, type CacheManager } from './cacheManager';
 import {
   getAnalyticsCacheKey,
   getMeasurementCacheKey,
   getMeasurementSyncStateCacheKey,
   getOperationalHistoryCacheKey,
 } from './cacheKeys';
-import type { MeasurementSyncState } from './types';
+import type {
+  MeasurementDataSource,
+  MeasurementSyncState,
+} from './types';
 
 type BackupSnapshotLoader = (channel: string) => Promise<BackupChannelSnapshot | null>;
 
 interface SyncStrategyOptions {
   cacheManager?: CacheManager;
-  endpoints?: ApiEndpoints;
+  runtimeEndpoints?: RuntimeEndpoints;
   backupSnapshotLoader?: BackupSnapshotLoader;
   now?: () => Date;
   analyticsTtlMs?: number;
   measurementCacheWindowHours?: number;
   analyticsWindowDays?: number;
   staleFallbackRecheckMs?: number;
-  staleFallbackProbeOffsetsDays?: readonly number[];
-  staleFallbackProbeWindowHours?: number;
+  staleFallbackProbeOffsetsMinutes?: readonly number[];
+  staleFallbackProbeWindowMinutes?: number;
 }
 
 const OPERATIONAL_HISTORY_CONFIG: Record<
@@ -53,14 +65,14 @@ const OPERATIONAL_HISTORY_CONFIG: Record<
   },
   '7d': {
     rangeHours: 7 * 24,
-    stepHours: 6,
-    ttlMs: 12 * 60 * 60 * 1000,
+    stepHours: 24,
+    ttlMs: 6 * 60 * 60 * 1000,
     windowMinutes: 30,
   },
   '30d': {
     rangeHours: 30 * 24,
     stepHours: 24,
-    ttlMs: 24 * 60 * 60 * 1000,
+    ttlMs: 12 * 60 * 60 * 1000,
     windowMinutes: 90,
   },
 };
@@ -75,16 +87,48 @@ function subtractHours(date: Date, hours: number): Date {
   return addHours(date, -hours);
 }
 
-function subtractDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() - days);
-  return next;
-}
-
 function subtractMinutes(date: Date, minutes: number): Date {
   const next = new Date(date);
   next.setMinutes(next.getMinutes() - minutes);
   return next;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatLocalDateKey(date: Date): string {
+  return [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function createLocalDayEndTimestamp(dayKey: string): string {
+  return `${dayKey}T23:59:59`;
+}
+
+function round(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function getMeasurementAgeHours(
+  latestMeasurementAt: string | null,
+  now: Date,
+): number | null {
+  if (!latestMeasurementAt) {
+    return null;
+  }
+
+  return round(
+    Math.max(
+      0,
+      (now.getTime() - parseApiTimestamp(latestMeasurementAt).getTime()) / 3_600_000,
+    ),
+  );
 }
 
 function latestMeasurementTimestamp(measurements: ApiMeasurement[]): string | null {
@@ -97,13 +141,10 @@ function latestMeasurementTimestamp(measurements: ApiMeasurement[]): string | nu
   }, measurements[0].timestamp);
 }
 
-function hasAnalyticsResults(
-  response: AnalyticsResponseMap[AnalyticsType] | null,
-): response is AnalyticsResponseMap[AnalyticsType] & { results: unknown[] } {
-  return Array.isArray(response?.results) && response.results.length > 0;
-}
-
-function mergeMeasurements(current: ApiMeasurement[], incoming: ApiMeasurement[]): ApiMeasurement[] {
+function mergeMeasurements(
+  current: ApiMeasurement[],
+  incoming: ApiMeasurement[],
+): ApiMeasurement[] {
   const map = new Map<string, ApiMeasurement>();
 
   [...current, ...incoming].forEach((measurement) => {
@@ -148,17 +189,224 @@ function toOperationalHistoryPoint(
   };
 }
 
-class BackupFallbackError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'BackupFallbackError';
+function mapPointsByDay(
+  points: OperationalHistoryPoint[],
+): Map<string, OperationalHistoryPoint> {
+  const map = new Map<string, OperationalHistoryPoint>();
+
+  points.forEach((point) => {
+    map.set(formatLocalDateKey(parseApiTimestamp(point.timestamp)), point);
+  });
+
+  return map;
+}
+
+function buildDailyHistoryPoints(
+  samples: DailyHistorySample[],
+): OperationalHistoryPoint[] {
+  return samples.flatMap((sample) => {
+    if (!sample.measurements.length || !sample.measurementAt) {
+      return [];
+    }
+
+    const point = toOperationalHistoryPoint(sample.measurements);
+    if (!point) {
+      return [];
+    }
+
+    return [
+      {
+        ...point,
+        timestamp: sample.measurementAt,
+      },
+    ];
+  });
+}
+
+function getHistoryAnchorAt(
+  historyResponse: HistoryResponse | null,
+  fallbackAnchorAt: string,
+): string {
+  if (!historyResponse || historyResponse.samples.length === 0) {
+    return fallbackAnchorAt;
   }
+
+  const sampleWithMeasurement = [...historyResponse.samples]
+    .reverse()
+    .find((sample) => sample.measurementAt);
+
+  if (sampleWithMeasurement?.measurementAt) {
+    return sampleWithMeasurement.measurementAt;
+  }
+
+  return createLocalDayEndTimestamp(
+    historyResponse.samples[historyResponse.samples.length - 1].date,
+  );
+}
+
+function averageHistoryPoints(
+  previous: OperationalHistoryPoint,
+  penultimate: OperationalHistoryPoint,
+  dayKey: string,
+): OperationalHistoryPoint {
+  return {
+    freezerEnergy: round(
+      (previous.freezerEnergy + penultimate.freezerEnergy) / 2,
+    ),
+    equipmentEnergy: round(
+      (previous.equipmentEnergy + penultimate.equipmentEnergy) / 2,
+    ),
+    temperature: round((previous.temperature + penultimate.temperature) / 2),
+    occupancy: round((previous.occupancy + penultimate.occupancy) / 2),
+    timestamp: createLocalDayEndTimestamp(dayKey),
+  };
+}
+
+function mergeDailyHistoryPoints(
+  basePoints: OperationalHistoryPoint[],
+  overlayPoints: OperationalHistoryPoint[],
+  period: Extract<OperationalChartPeriod, '7d' | '30d'>,
+  anchor: Date,
+): OperationalHistoryPoint[] {
+  const dayCount = period === '7d' ? 7 : 30;
+  const anchorDay = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    anchor.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const baseMap = mapPointsByDay(basePoints);
+  const overlayMap = mapPointsByDay(overlayPoints);
+  const merged: OperationalHistoryPoint[] = [];
+
+  for (let index = dayCount - 1; index >= 0; index -= 1) {
+    const dayKey = formatLocalDateKey(addDays(anchorDay, -index));
+    const overlayPoint = overlayMap.get(dayKey);
+
+    if (overlayPoint) {
+      merged.push(overlayPoint);
+      continue;
+    }
+
+    if (merged.length >= 2) {
+      merged.push(
+        averageHistoryPoints(
+          merged[merged.length - 1],
+          merged[merged.length - 2],
+          dayKey,
+        ),
+      );
+      continue;
+    }
+
+    const basePoint = baseMap.get(dayKey);
+    if (basePoint) {
+      merged.push(basePoint);
+    }
+  }
+
+  return merged;
+}
+
+function getBucketKey(
+  timestamp: string,
+  anchor: Date,
+  config: (typeof OPERATIONAL_HISTORY_CONFIG)[OperationalChartPeriod],
+): number | null {
+  const diffMs = anchor.getTime() - parseApiTimestamp(timestamp).getTime();
+  const rangeMs = config.rangeHours * 60 * 60 * 1000;
+  const stepMs = config.stepHours * 60 * 60 * 1000;
+
+  if (diffMs < 0 || diffMs > rangeMs) {
+    return null;
+  }
+
+  return Math.floor(diffMs / stepMs);
+}
+
+function buildOverlayHistoryPoints(
+  measurements: ApiMeasurement[],
+  period: OperationalChartPeriod,
+  anchor: Date,
+): OperationalHistoryPoint[] {
+  const config = OPERATIONAL_HISTORY_CONFIG[period];
+  const pointCount = Math.max(1, Math.ceil(config.rangeHours / config.stepHours));
+  const points: OperationalHistoryPoint[] = [];
+  const seen = new Set<string>();
+
+  for (let index = pointCount - 1; index >= 0; index -= 1) {
+    const bucketEnd = subtractHours(anchor, index * config.stepHours);
+    const bucketStart = subtractMinutes(bucketEnd, config.windowMinutes);
+    const bucketMeasurements = measurements.filter((measurement) => {
+      const timestamp = parseApiTimestamp(measurement.timestamp).getTime();
+      return (
+        timestamp >= bucketStart.getTime() && timestamp <= bucketEnd.getTime()
+      );
+    });
+    const point = toOperationalHistoryPoint(bucketMeasurements);
+
+    if (!point || seen.has(point.timestamp)) {
+      continue;
+    }
+
+    seen.add(point.timestamp);
+    points.push(point);
+  }
+
+  return points;
+}
+
+function mergeHistoryPoints(
+  basePoints: OperationalHistoryPoint[],
+  overlayPoints: OperationalHistoryPoint[],
+  period: OperationalChartPeriod,
+  anchor: Date,
+): OperationalHistoryPoint[] {
+  const config = OPERATIONAL_HISTORY_CONFIG[period];
+  const pointMap = new Map<number, OperationalHistoryPoint>();
+
+  [...basePoints, ...overlayPoints].forEach((point) => {
+    const bucketKey = getBucketKey(point.timestamp, anchor, config);
+    if (bucketKey === null) {
+      return;
+    }
+
+    pointMap.set(bucketKey, point);
+  });
+
+  return Array.from(pointMap.values()).sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp),
+  );
+}
+
+function buildSyncMessageFromBootstrap(
+  response: BootstrapResponse,
+): string {
+  return response.message ?? `Snapshot ${response.snapshotStatus} carregado.`;
+}
+
+function buildSyncMessageFromRecent(
+  response: RecentResponse,
+  latestMeasurementAt: string | null,
+): string {
+  if (response.message) {
+    return response.message;
+  }
+
+  if (latestMeasurementAt) {
+    return `Sem dados novos nas ultimas 72 horas; exibindo ${latestMeasurementAt}.`;
+  }
+
+  return 'Nenhum dado recente foi encontrado.';
 }
 
 export class SyncStrategy {
   private cacheManager: CacheManager;
 
-  private endpoints: ApiEndpoints;
+  private runtimeEndpoints: RuntimeEndpoints;
 
   private backupSnapshotLoader: BackupSnapshotLoader;
 
@@ -172,74 +420,88 @@ export class SyncStrategy {
 
   private staleFallbackRecheckMs: number;
 
-  private staleFallbackProbeOffsetsDays: readonly number[];
+  private staleFallbackProbeOffsetsMinutes: readonly number[];
 
-  private staleFallbackProbeWindowHours: number;
+  private staleFallbackProbeWindowMinutes: number;
 
   constructor(options: SyncStrategyOptions = {}) {
     this.cacheManager = options.cacheManager ?? cacheManager;
-    this.endpoints = options.endpoints ?? apiEndpoints;
+    this.runtimeEndpoints = options.runtimeEndpoints ?? runtimeEndpoints;
     this.backupSnapshotLoader = options.backupSnapshotLoader ?? loadBackupSnapshot;
     this.now = options.now ?? (() => new Date());
     this.analyticsTtlMs = options.analyticsTtlMs ?? API_CONFIG.analyticsTtlMs;
     this.measurementCacheWindowHours =
-      options.measurementCacheWindowHours ?? API_CONFIG.measurementCacheWindowHours;
-    this.analyticsWindowDays = options.analyticsWindowDays ?? API_CONFIG.analyticsWindowDays;
+      options.measurementCacheWindowHours ??
+      API_CONFIG.measurementCacheWindowHours;
+    this.analyticsWindowDays =
+      options.analyticsWindowDays ?? API_CONFIG.analyticsWindowDays;
     this.staleFallbackRecheckMs =
       options.staleFallbackRecheckMs ?? API_CONFIG.staleFallbackRecheckMs;
-    this.staleFallbackProbeOffsetsDays =
-      options.staleFallbackProbeOffsetsDays ?? API_CONFIG.staleFallbackProbeOffsetsDays;
-    this.staleFallbackProbeWindowHours =
-      options.staleFallbackProbeWindowHours ?? API_CONFIG.staleFallbackProbeWindowHours;
+    this.staleFallbackProbeOffsetsMinutes =
+      options.staleFallbackProbeOffsetsMinutes ??
+      API_CONFIG.staleFallbackProbeOffsetsMinutes;
+    this.staleFallbackProbeWindowMinutes =
+      options.staleFallbackProbeWindowMinutes ??
+      API_CONFIG.staleFallbackProbeWindowMinutes;
   }
 
   needsColdStart(channel: string): boolean {
-    return this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel)) === null;
+    return (
+      this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel)) === null
+    );
   }
 
   async coldStart(channel: string, onProgress?: (progress: number) => void): Promise<void> {
-    const now = this.now();
-    const start = subtractHours(now, this.measurementCacheWindowHours);
-
     onProgress?.(0);
+    const nowIso = this.now().toISOString();
+    const bundledSnapshot = await this.backupSnapshotLoader(channel);
+
+    if (bundledSnapshot) {
+      const bundledSnapshotAgeHours = getMeasurementAgeHours(
+        bundledSnapshot.latestMeasurementAt,
+        this.now(),
+      );
+      this.hydrateSnapshot(channel, bundledSnapshot, {
+        dataSource: 'backup',
+        status: 'backup',
+        lastApiAttemptAt: null,
+        lastSuccessfulApiSyncAt: null,
+        backupSnapshotStatus: 'bundled',
+        backupRefreshAttemptedAt: null,
+        backupRefreshFinishedAt: null,
+        backupRefreshDurationMs: null,
+        backupRefreshError: null,
+        backupSnapshotAgeHours: bundledSnapshotAgeHours,
+        isBackupSnapshotFreshEnough:
+          bundledSnapshotAgeHours !== null && bundledSnapshotAgeHours <= 72,
+        message:
+          'Snapshot local carregado enquanto o backup renovavel e consultado.',
+      });
+      onProgress?.(35);
+    }
 
     try {
-      const response = await this.endpoints.getChannelMeasurements(
-        channel,
-        start.toISOString(),
-        now.toISOString(),
-      );
-      const trimmedMeasurements = this.trimMeasurements(response.measurements);
-      const syncState = await this.persistMeasurementState(channel, trimmedMeasurements, now, {
-        responseMeasurements: trimmedMeasurements,
-        forceFallbackSearch: trimmedMeasurements.length === 0,
+      const response = await this.runtimeEndpoints.getBootstrapSnapshot(channel);
+      this.hydrateSnapshot(channel, response.snapshot, {
+        dataSource: 'backup',
+        status: 'backup',
+        lastApiAttemptAt: nowIso,
+        lastSuccessfulApiSyncAt: null,
+        backupSnapshotStatus: response.snapshotStatus,
+        backupRefreshAttemptedAt: response.refreshAttemptedAt,
+        backupRefreshFinishedAt: response.refreshFinishedAt,
+        backupRefreshDurationMs: response.refreshDurationMs,
+        backupRefreshError: response.refreshError,
+        backupSnapshotAgeHours: response.snapshotAgeHours,
+        isBackupSnapshotFreshEnough: response.isSnapshotFreshEnough,
+        message: buildSyncMessageFromBootstrap(response),
       });
-
-      if (syncState.status === 'backup') {
-        onProgress?.(100);
-        throw new BackupFallbackError(
-          syncState.message ?? 'API indisponivel; usando o snapshot local do backup.',
-        );
-      }
-
-      if (trimmedMeasurements.length > 0) {
-        this.cacheManager.set(getMeasurementCacheKey(channel), trimmedMeasurements);
-      }
       onProgress?.(100);
-      await this.syncAnalytics(channel);
     } catch (error) {
-      const fallbackState = await this.applyBackupFallback(channel, now, {
-        lastApiAttemptAt: now.toISOString(),
-        message:
-          error instanceof Error
-            ? `API indisponivel; usando dados do backup local. ${error.message}`
-            : 'API indisponivel; usando dados do backup local.',
-      });
-
       onProgress?.(100);
 
-      if (fallbackState) {
-        throw new BackupFallbackError(fallbackState.message ?? 'Usando dados do backup local.');
+      if (this.getMeasurementSyncState(channel)?.latestMeasurementAt) {
+        return;
       }
 
       throw error;
@@ -252,331 +514,261 @@ export class SyncStrategy {
       return;
     }
 
-    if (this.getMeasurementSyncState(channel)?.dataSource === 'backup') {
-      await this.coldStart(channel);
+    const now = this.now();
+    const existingMeasurements =
+      this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel))?.data ?? [];
+    const previousState = this.getMeasurementSyncState(channel);
+    const latestKnownMeasurementAt =
+      previousState?.recentAnchorAt ??
+      previousState?.latestMeasurementAt ??
+      latestMeasurementTimestamp(existingMeasurements);
+    const allowProbe = this.shouldProbeForRecent(
+      latestKnownMeasurementAt,
+      previousState?.lastFallbackCheckAt ?? null,
+      now,
+    );
+    const recentResponse = await this.runtimeEndpoints.getRecentMeasurements(channel, {
+      lastKnownAt: latestKnownMeasurementAt,
+      shouldProbe: allowProbe,
+    });
+
+    if (recentResponse.measurements.length === 0) {
+      const latestMeasurementAt =
+        latestKnownMeasurementAt ?? latestMeasurementTimestamp(existingMeasurements);
+      const hasBackupBaseline =
+        previousState?.backupSnapshotGeneratedAt !== null ||
+        previousState?.dataSource === 'backup' ||
+        previousState?.dataSource === 'hybrid';
+      const dataSource: MeasurementDataSource =
+        previousState?.dataSource === 'hybrid'
+          ? 'hybrid'
+          : hasBackupBaseline
+            ? 'backup'
+            : 'api';
+      const state: MeasurementSyncState = {
+        channel,
+        status: latestMeasurementAt ? 'fallback_stale' : 'empty',
+        dataSource,
+        latestMeasurementAt,
+        lastFallbackCheckAt: allowProbe
+          ? recentResponse.checkedAt
+          : previousState?.lastFallbackCheckAt ?? null,
+        lastApiAttemptAt: now.toISOString(),
+        lastSuccessfulApiSyncAt: previousState?.lastSuccessfulApiSyncAt ?? null,
+        backupSnapshotGeneratedAt: previousState?.backupSnapshotGeneratedAt ?? null,
+        backupSnapshotStatus: previousState?.backupSnapshotStatus ?? null,
+        backupRefreshAttemptedAt:
+          previousState?.backupRefreshAttemptedAt ?? null,
+        backupRefreshFinishedAt:
+          previousState?.backupRefreshFinishedAt ?? null,
+        backupRefreshDurationMs:
+          previousState?.backupRefreshDurationMs ?? null,
+        backupRefreshError: previousState?.backupRefreshError ?? null,
+        backupSnapshotAgeHours:
+          previousState?.backupSnapshotAgeHours ??
+          getMeasurementAgeHours(latestMeasurementAt, now),
+        isBackupSnapshotFreshEnough:
+          previousState?.isBackupSnapshotFreshEnough ??
+          (getMeasurementAgeHours(latestMeasurementAt, now) ?? Number.POSITIVE_INFINITY) <=
+            72,
+        recentAnchorAt: previousState?.recentAnchorAt ?? latestMeasurementAt,
+        recentWindowFrom:
+          recentResponse.probeWindow?.from ?? previousState?.recentWindowFrom ?? null,
+        recentWindowTo:
+          recentResponse.probeWindow?.to ?? previousState?.recentWindowTo ?? null,
+        message: buildSyncMessageFromRecent(recentResponse, latestMeasurementAt),
+      };
+
+      this.setMeasurementSyncState(channel, state);
+      await this.syncOperationalHistory(channel, '24h');
+      await this.syncOperationalHistory(channel, '7d');
+      await this.syncOperationalHistory(channel, '30d');
       return;
     }
 
-    const key = getMeasurementCacheKey(channel);
-    const lastSync = this.cacheManager.getLastSync(key);
-    const nowDate = this.now();
-    const now = nowDate.toISOString();
+    const mergedMeasurements = this.trimMeasurements(
+      mergeMeasurements(existingMeasurements, recentResponse.measurements),
+    );
+    const latestMeasurementAt =
+      latestMeasurementTimestamp(mergedMeasurements) ??
+      recentResponse.anchorAt ??
+      latestKnownMeasurementAt;
 
-    if (!lastSync || lastSync >= now) {
-      await this.syncAnalytics(channel);
-      return;
-    }
+    this.cacheManager.set(getMeasurementCacheKey(channel), mergedMeasurements);
 
-    try {
-      const response = await this.endpoints.getChannelMeasurements(channel, lastSync, now);
-      const existing = this.cacheManager.get<ApiMeasurement[]>(key)?.data ?? [];
-      const mergedMeasurements =
-        response.measurements.length > 0
-          ? this.trimMeasurements(mergeMeasurements(existing, response.measurements))
-          : existing;
+    const isFresh =
+      latestMeasurementAt !== null &&
+      now.getTime() - parseApiTimestamp(latestMeasurementAt).getTime() <=
+        API_CONFIG.staleAfterMs;
+    const dataSource: MeasurementDataSource =
+      previousState?.dataSource === 'backup' || previousState?.dataSource === 'hybrid'
+        ? 'hybrid'
+        : 'api';
+    const state: MeasurementSyncState = {
+      channel,
+      status: isFresh ? 'fresh' : 'fallback_stale',
+      dataSource,
+      latestMeasurementAt,
+      lastFallbackCheckAt:
+        recentResponse.source === 'probed_window' ? recentResponse.checkedAt : null,
+      lastApiAttemptAt: now.toISOString(),
+      lastSuccessfulApiSyncAt: now.toISOString(),
+      backupSnapshotGeneratedAt: previousState?.backupSnapshotGeneratedAt ?? null,
+      backupSnapshotStatus: previousState?.backupSnapshotStatus ?? null,
+      backupRefreshAttemptedAt: previousState?.backupRefreshAttemptedAt ?? null,
+      backupRefreshFinishedAt: previousState?.backupRefreshFinishedAt ?? null,
+      backupRefreshDurationMs: previousState?.backupRefreshDurationMs ?? null,
+      backupRefreshError: previousState?.backupRefreshError ?? null,
+      backupSnapshotAgeHours:
+        previousState?.backupSnapshotAgeHours ??
+        getMeasurementAgeHours(previousState?.latestMeasurementAt ?? null, now),
+      isBackupSnapshotFreshEnough:
+        previousState?.isBackupSnapshotFreshEnough ??
+        (getMeasurementAgeHours(previousState?.latestMeasurementAt ?? null, now) ??
+          Number.POSITIVE_INFINITY) <= 72,
+      recentAnchorAt: recentResponse.anchorAt ?? latestMeasurementAt,
+      recentWindowFrom: recentResponse.probeWindow?.from ?? null,
+      recentWindowTo: recentResponse.probeWindow?.to ?? null,
+      message: buildSyncMessageFromRecent(recentResponse, latestMeasurementAt),
+    };
 
-      const syncState = await this.persistMeasurementState(channel, mergedMeasurements, nowDate, {
-        responseMeasurements: response.measurements,
-      });
-
-      if (syncState.status === 'backup') {
-        throw new BackupFallbackError(
-          syncState.message ?? 'API sem dados atuais; usando o snapshot local do backup.',
-        );
-      }
-
-      await this.syncAnalytics(channel);
-    } catch (error) {
-      const fallbackState = await this.applyBackupFallback(channel, nowDate, {
-        lastApiAttemptAt: now,
-        message:
-          error instanceof Error
-            ? `API indisponivel; usando dados do backup local. ${error.message}`
-            : 'API indisponivel; usando dados do backup local.',
-      });
-
-      if (fallbackState) {
-        throw new BackupFallbackError(fallbackState.message ?? 'Usando dados do backup local.');
-      }
-
-      throw error;
-    }
+    this.setMeasurementSyncState(channel, state);
+    await this.syncOperationalHistory(channel, '24h');
+    await this.syncOperationalHistory(channel, '7d');
+    await this.syncOperationalHistory(channel, '30d');
   }
 
-  async syncAnalytics(channel: string): Promise<void> {
-    const now = this.now();
-    const fromTime = subtractDays(now, this.analyticsWindowDays).toISOString();
-    const toTime = now.toISOString();
-
-    const tasks: Array<{
-      type: AnalyticsType;
-      run: () => Promise<unknown>;
-    }> = [
-      {
-        type: 'consumption',
-        run: () => this.endpoints.getConsumption(channel, fromTime, toTime),
-      },
-      {
-        type: 'demand_peaks',
-        run: () => this.endpoints.getDemandPeaks(channel, fromTime, toTime),
-      },
-      {
-        type: 'electrical_health',
-        run: () => this.endpoints.getElectricalHealth(channel, fromTime, toTime),
-      },
-      {
-        type: 'hourly_profile',
-        run: () => this.endpoints.getHourlyProfile(channel, fromTime, toTime),
-      },
-      {
-        type: 'current_by_sensor',
-        run: () => this.endpoints.getCurrentBySensor(channel, fromTime, toTime),
-      },
-    ];
-
-    for (const task of tasks) {
-      const cacheKey = getAnalyticsCacheKey(channel, task.type);
-      const shouldForceRefresh = this.getMeasurementSyncState(channel)?.dataSource === 'backup';
-      if (!shouldForceRefresh && !this.cacheManager.isExpired(cacheKey, this.analyticsTtlMs)) {
-        continue;
-      }
-
-      const response = (await task.run()) as AnalyticsResponseMap[typeof task.type];
-      const cachedResponse =
-        this.cacheManager.get<AnalyticsResponseMap[typeof task.type]>(cacheKey)?.data ?? null;
-
-      if (!hasAnalyticsResults(response) && hasAnalyticsResults(cachedResponse)) {
-        this.cacheManager.set(cacheKey, cachedResponse);
-        continue;
-      }
-
-      this.cacheManager.set(cacheKey, response);
-    }
+  async syncAnalytics(_channel: string): Promise<void> {
+    return Promise.resolve();
   }
 
   async syncOperationalHistory(
     channel: string,
     period: OperationalChartPeriod,
   ): Promise<void> {
-    if (this.getMeasurementSyncState(channel)?.dataSource === 'backup') {
-      await this.hydrateBackupOperationalHistory(channel);
-      return;
-    }
-
     const cacheKey = getOperationalHistoryCacheKey(channel, period);
+    const cachedEntry =
+      this.cacheManager.get<OperationalHistoryCachePayload>(cacheKey);
+    const cachedPayload = cachedEntry?.data ?? null;
+    const measurements =
+      this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel))?.data ?? [];
+    const syncState = this.getMeasurementSyncState(channel);
     const latestMeasurementAt =
-      this.getMeasurementSyncState(channel)?.latestMeasurementAt ??
-      latestMeasurementTimestamp(
-        this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel))?.data ?? [],
-      );
-    const cachedPayload =
-      this.cacheManager.get<OperationalHistoryCachePayload>(cacheKey)?.data ?? null;
-    const config = OPERATIONAL_HISTORY_CONFIG[period];
-
-    if (
-      latestMeasurementAt &&
-      cachedPayload?.anchorMeasurementAt === latestMeasurementAt &&
-      !this.cacheManager.isExpired(cacheKey, config.ttlMs)
-    ) {
-      return;
-    }
+      syncState?.recentAnchorAt ??
+      syncState?.latestMeasurementAt ??
+      latestMeasurementTimestamp(measurements) ??
+      cachedPayload?.anchorMeasurementAt ??
+      null;
 
     if (!latestMeasurementAt) {
       return;
     }
 
     const anchor = parseApiTimestamp(latestMeasurementAt);
-    const pointCount = Math.max(1, Math.ceil(config.rangeHours / config.stepHours));
-    const points: OperationalHistoryPoint[] = [];
-    const seenTimestamps = new Set<string>();
 
-    try {
-      for (let index = pointCount - 1; index >= 0; index -= 1) {
-        const bucketEnd = subtractHours(anchor, index * config.stepHours);
-        const bucketStart = subtractMinutes(bucketEnd, config.windowMinutes);
-        const response = await this.endpoints.getChannelMeasurements(
-          channel,
-          bucketStart.toISOString(),
-          bucketEnd.toISOString(),
-        );
-        const point = toOperationalHistoryPoint(response.measurements);
+    if (period === '7d' || period === '30d') {
+      const historyResponse = await this.fetchRuntimeHistoryIfNeeded(
+        channel,
+        period,
+        latestMeasurementAt,
+        syncState,
+        cachedEntry,
+      );
+      const historyAnchorAt = getHistoryAnchorAt(
+        historyResponse,
+        latestMeasurementAt,
+      );
+      const overlayPoints = historyResponse
+        ? buildDailyHistoryPoints(historyResponse.samples)
+        : [];
+      const mergedDailyPoints = mergeDailyHistoryPoints(
+        cachedPayload?.points ?? [],
+        overlayPoints,
+        period,
+        parseApiTimestamp(historyAnchorAt),
+      );
 
-        if (!point || seenTimestamps.has(point.timestamp)) {
-          continue;
-        }
+      this.cacheManager.set(cacheKey, {
+        anchorMeasurementAt: historyAnchorAt,
+        period,
+        points: mergedDailyPoints,
+      });
+      return;
+    }
 
-        seenTimestamps.add(point.timestamp);
-        points.push(point);
-      }
+    const overlayPoints = buildOverlayHistoryPoints(measurements, period, anchor);
 
-      if (points.length === 0) {
-        const fallbackPoint = toOperationalHistoryPoint(
-          this.cacheManager.get<ApiMeasurement[]>(getMeasurementCacheKey(channel))?.data ?? [],
-        );
-
-        if (fallbackPoint) {
-          points.push(fallbackPoint);
-        }
-      }
-
+    if (!cachedPayload) {
       this.cacheManager.set(cacheKey, {
         anchorMeasurementAt: latestMeasurementAt,
         period,
-        points,
+        points: overlayPoints,
       });
-    } catch (error) {
-      const hydrated = await this.hydrateBackupOperationalHistory(channel);
-      if (hydrated) {
-        return;
-      }
-
-      throw error;
-    }
-  }
-
-  private async persistMeasurementState(
-    channel: string,
-    measurements: ApiMeasurement[],
-    now: Date,
-    options: {
-      responseMeasurements?: ApiMeasurement[];
-      forceFallbackSearch?: boolean;
-    } = {},
-  ): Promise<MeasurementSyncState> {
-    const key = getMeasurementCacheKey(channel);
-    const responseMeasurements = options.responseMeasurements ?? [];
-    const fallbackResult =
-      responseMeasurements.length > 0
-        ? { measurements: [] as ApiMeasurement[], checkedAt: now.toISOString() }
-        : await this.resolveLatestAvailableMeasurements(
-            channel,
-            now,
-            latestMeasurementTimestamp(measurements),
-            options.forceFallbackSearch ?? false,
-          );
-    const mergedMeasurements = mergeMeasurements(measurements, fallbackResult.measurements);
-    const latestMeasurementAt = latestMeasurementTimestamp(mergedMeasurements);
-    const previousState = this.getMeasurementSyncState(channel);
-
-    if (latestMeasurementAt) {
-      const isFresh =
-        now.getTime() - parseApiTimestamp(latestMeasurementAt).getTime() <= API_CONFIG.staleAfterMs;
-
-      this.cacheManager.set(key, mergedMeasurements);
-      const state: MeasurementSyncState = {
-        channel,
-        status: isFresh ? 'fresh' : 'fallback_stale',
-        dataSource: 'api',
-        latestMeasurementAt,
-        lastFallbackCheckAt: isFresh ? null : fallbackResult.checkedAt,
-        lastApiAttemptAt: now.toISOString(),
-        lastSuccessfulApiSyncAt: now.toISOString(),
-        backupSnapshotGeneratedAt: null,
-        message: isFresh
-          ? null
-          : `API sem dados recentes; usando a ultima medicao disponivel em ${latestMeasurementAt}.`,
-      };
-
-      this.setMeasurementSyncState(channel, state);
-      return state;
+      return;
     }
 
-    const fallbackState = await this.applyBackupFallback(channel, now, {
-      lastApiAttemptAt: now.toISOString(),
-      message:
-        'API sem dados recentes e sem historico util; exibindo o snapshot local do backup.',
+    this.cacheManager.set(cacheKey, {
+      anchorMeasurementAt: latestMeasurementAt,
+      period,
+      points: mergeHistoryPoints(cachedPayload.points, overlayPoints, period, anchor),
     });
-
-    if (fallbackState) {
-      return fallbackState;
-    }
-
-    const state: MeasurementSyncState = {
-      channel,
-      status: 'empty',
-      dataSource: previousState?.dataSource ?? 'api',
-      latestMeasurementAt: null,
-      lastFallbackCheckAt: fallbackResult.checkedAt,
-      lastApiAttemptAt: now.toISOString(),
-      lastSuccessfulApiSyncAt: previousState?.lastSuccessfulApiSyncAt ?? null,
-      backupSnapshotGeneratedAt: previousState?.backupSnapshotGeneratedAt ?? null,
-      message: 'API sem dados recentes e sem historico disponivel para fallback.',
-    };
-
-    this.setMeasurementSyncState(channel, state);
-    return state;
   }
 
-  private async resolveLatestAvailableMeasurements(
+  private async fetchRuntimeHistoryIfNeeded(
     channel: string,
-    now: Date,
-    latestKnownMeasurementAt: string | null,
-    forceSearch: boolean,
-  ): Promise<{ measurements: ApiMeasurement[]; checkedAt: string }> {
-    const checkedAt = now.toISOString();
-    const syncState = this.getMeasurementSyncState(channel);
+    period: Extract<OperationalChartPeriod, '7d' | '30d'>,
+    latestMeasurementAt: string,
+    syncState: MeasurementSyncState | null,
+    cachedEntry: CacheEntry<OperationalHistoryCachePayload> | null,
+  ): Promise<HistoryResponse | null> {
+    const cacheKey = getOperationalHistoryCacheKey(channel, period);
+    const config = OPERATIONAL_HISTORY_CONFIG[period];
+    const expectedPointCount = period === '7d' ? 7 : 30;
+    const isBundledFallback =
+      syncState?.backupSnapshotStatus === 'bundled' ||
+      (syncState?.backupSnapshotStatus === 'last_good' &&
+        syncState.isBackupSnapshotFreshEnough === false);
+    const shouldRefresh =
+      !cachedEntry ||
+      cachedEntry.data.points.length === 0 ||
+      cachedEntry.data.anchorMeasurementAt !== latestMeasurementAt ||
+      this.cacheManager.isExpired(cacheKey, config.ttlMs) ||
+      (isBundledFallback && cachedEntry.data.points.length < expectedPointCount);
 
-    if (!forceSearch && this.shouldReuseFallback(channel, now)) {
-      return {
-        measurements: [],
-        checkedAt: syncState?.lastFallbackCheckAt ?? checkedAt,
-      };
+    if (!shouldRefresh) {
+      return null;
     }
 
-    for (const offsetDays of this.staleFallbackProbeOffsetsDays) {
-      const probeStart = subtractDays(now, offsetDays);
-      const probeEnd = addHours(probeStart, this.staleFallbackProbeWindowHours);
-      const response = await this.endpoints.getChannelMeasurements(
-        channel,
-        probeStart.toISOString(),
-        probeEnd.toISOString(),
-      );
-
-      if (response.measurements.length === 0) {
-        continue;
-      }
-
-      const latestResponseTimestamp = latestMeasurementTimestamp(response.measurements);
-      if (
-        latestResponseTimestamp &&
-        latestKnownMeasurementAt &&
-        latestResponseTimestamp <= latestKnownMeasurementAt
-      ) {
-        return {
-          measurements: [],
-          checkedAt,
-        };
-      }
-
-      return {
-        measurements: this.trimMeasurements(response.measurements),
-        checkedAt,
-      };
-    }
-
-    return {
-      measurements: [],
-      checkedAt,
-    };
+    return this.runtimeEndpoints.getHistory(channel, period === '7d' ? 7 : 30);
   }
 
-  private shouldReuseFallback(channel: string, now: Date): boolean {
-    const syncState = this.getMeasurementSyncState(channel);
-
-    if (syncState?.status !== 'fallback_stale' || !syncState.lastFallbackCheckAt) {
-      return false;
+  private shouldProbeForRecent(
+    latestKnownMeasurementAt: string | null,
+    lastFallbackCheckAt: string | null,
+    now: Date,
+  ): boolean {
+    if (lastFallbackCheckAt) {
+      const elapsedSinceFallback =
+        now.getTime() - new Date(lastFallbackCheckAt).getTime();
+      if (elapsedSinceFallback < this.staleFallbackRecheckMs) {
+        return false;
+      }
     }
 
-    return (
-      now.getTime() - new Date(syncState.lastFallbackCheckAt).getTime() <
-      this.staleFallbackRecheckMs
-    );
+    if (!latestKnownMeasurementAt) {
+      return true;
+    }
+
+    const ageMs =
+      now.getTime() - parseApiTimestamp(latestKnownMeasurementAt).getTime();
+    return ageMs > API_CONFIG.recentDeltaWindowMinutes * 60 * 1000;
   }
 
   private getMeasurementSyncState(channel: string): MeasurementSyncState | null {
     return (
-      this.cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey(channel))?.data ??
-      null
+      this.cacheManager.get<MeasurementSyncState>(
+        getMeasurementSyncStateCacheKey(channel),
+      )?.data ?? null
     );
   }
 
@@ -584,23 +776,27 @@ export class SyncStrategy {
     this.cacheManager.set(getMeasurementSyncStateCacheKey(channel), state);
   }
 
-  private async applyBackupFallback(
+  private hydrateSnapshot(
     channel: string,
-    now: Date,
+    snapshot: BackupChannelSnapshot,
     options: {
-      lastApiAttemptAt?: string | null;
+      dataSource: MeasurementDataSource;
+      status: MeasurementSyncState['status'];
+      lastApiAttemptAt: string | null;
+      lastSuccessfulApiSyncAt: string | null;
+      backupSnapshotStatus: MeasurementSyncState['backupSnapshotStatus'];
+      backupRefreshAttemptedAt: string | null;
+      backupRefreshFinishedAt: string | null;
+      backupRefreshDurationMs: number | null;
+      backupRefreshError: string | null;
+      backupSnapshotAgeHours: number | null;
+      isBackupSnapshotFreshEnough: boolean | null;
       message: string;
     },
-  ): Promise<MeasurementSyncState | null> {
-    const snapshot = await this.backupSnapshotLoader(channel);
-
-    if (!snapshot) {
-      return null;
-    }
-
+  ): void {
     this.cacheManager.set(
       getMeasurementCacheKey(channel),
-      snapshot.operational.recentMeasurements,
+      this.trimMeasurements(snapshot.operational.recentMeasurements),
     );
     (
       Object.entries(snapshot.operational.histories) as Array<
@@ -610,59 +806,47 @@ export class SyncStrategy {
       this.cacheManager.set(getOperationalHistoryCacheKey(channel, period), payload);
     });
     this.cacheManager.set(
-      getAnalyticsCacheKey(channel, 'consumption'),
+      getAnalyticsCacheKey(channel, 'consumption' as AnalyticsType),
       snapshot.business.consumption,
     );
     this.cacheManager.set(
-      getAnalyticsCacheKey(channel, 'demand_peaks'),
+      getAnalyticsCacheKey(channel, 'demand_peaks' as AnalyticsType),
       snapshot.business.demandPeaks,
     );
     this.cacheManager.set(
-      getAnalyticsCacheKey(channel, 'electrical_health'),
+      getAnalyticsCacheKey(channel, 'electrical_health' as AnalyticsType),
       snapshot.business.electricalHealth,
     );
     this.cacheManager.set(
-      getAnalyticsCacheKey(channel, 'hourly_profile'),
+      getAnalyticsCacheKey(channel, 'hourly_profile' as AnalyticsType),
       snapshot.logistics.hourlyProfile,
     );
     this.cacheManager.set(
-      getAnalyticsCacheKey(channel, 'current_by_sensor'),
+      getAnalyticsCacheKey(channel, 'current_by_sensor' as AnalyticsType),
       snapshot.logistics.currentBySensor,
     );
 
-    const previousState = this.getMeasurementSyncState(channel);
-    const state: MeasurementSyncState = {
+    this.setMeasurementSyncState(channel, {
       channel,
-      status: 'backup',
-      dataSource: 'backup',
+      status: options.status,
+      dataSource: options.dataSource,
       latestMeasurementAt: snapshot.latestMeasurementAt,
       lastFallbackCheckAt: null,
-      lastApiAttemptAt: options.lastApiAttemptAt ?? previousState?.lastApiAttemptAt ?? null,
-      lastSuccessfulApiSyncAt: previousState?.lastSuccessfulApiSyncAt ?? null,
+      lastApiAttemptAt: options.lastApiAttemptAt,
+      lastSuccessfulApiSyncAt: options.lastSuccessfulApiSyncAt,
       backupSnapshotGeneratedAt: snapshot.generatedAt,
-      message: `${options.message} Ultimo dado do backup: ${snapshot.latestMeasurementAt}.`,
-    };
-
-    this.setMeasurementSyncState(channel, state);
-    return state;
-  }
-
-  private async hydrateBackupOperationalHistory(channel: string): Promise<boolean> {
-    const snapshot = await this.backupSnapshotLoader(channel);
-
-    if (!snapshot) {
-      return false;
-    }
-
-    (
-      Object.entries(snapshot.operational.histories) as Array<
-        [OperationalChartPeriod, OperationalHistoryCachePayload]
-      >
-    ).forEach(([period, payload]) => {
-      this.cacheManager.set(getOperationalHistoryCacheKey(channel, period), payload);
+      backupSnapshotStatus: options.backupSnapshotStatus,
+      backupRefreshAttemptedAt: options.backupRefreshAttemptedAt,
+      backupRefreshFinishedAt: options.backupRefreshFinishedAt,
+      backupRefreshDurationMs: options.backupRefreshDurationMs,
+      backupRefreshError: options.backupRefreshError,
+      backupSnapshotAgeHours: options.backupSnapshotAgeHours,
+      isBackupSnapshotFreshEnough: options.isBackupSnapshotFreshEnough,
+      recentAnchorAt: null,
+      recentWindowFrom: null,
+      recentWindowTo: null,
+      message: options.message,
     });
-
-    return true;
   }
 
   private trimMeasurements(measurements: ApiMeasurement[]): ApiMeasurement[] {
@@ -676,8 +860,11 @@ export class SyncStrategy {
       parseApiTimestamp(latestTimestamp).getTime() -
       this.measurementCacheWindowHours * 60 * 60 * 1000;
 
-    return measurements.filter(
-      (measurement) => parseApiTimestamp(measurement.timestamp).getTime() >= cutoff,
-    ).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+    return measurements
+      .filter(
+        (measurement) =>
+          parseApiTimestamp(measurement.timestamp).getTime() >= cutoff,
+      )
+      .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
   }
 }

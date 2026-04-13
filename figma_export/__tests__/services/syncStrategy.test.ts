@@ -1,22 +1,14 @@
-import type { ApiEndpoints } from '@/services/api/endpoints';
-import type {
-  ChannelMeasurementsResponse,
-  ConsumptionResponse,
-  CurrentBySensorResponse,
-  DemandPeaksResponse,
-  ElectricalHealthResponse,
-  HourlyProfileResponse,
-} from '@/services/api/types';
+import type { BackupChannelSnapshot } from '@/domain/types';
+import type { OperationalHistoryCachePayload } from '@/domain/types';
 import { CacheManager } from '@/services/cache/cacheManager';
 import {
-  getAnalyticsCacheKey,
   getMeasurementCacheKey,
   getMeasurementSyncStateCacheKey,
+  getOperationalHistoryCacheKey,
 } from '@/services/cache/cacheKeys';
 import { SyncStrategy } from '@/services/cache/syncStrategy';
 import type { MeasurementSyncState } from '@/services/cache/types';
-import emptyWindowFixture from '../../analise-banco-de-dados/fixtures/channel-lab-default-empty-24h.json';
-import type { BackupChannelSnapshot } from '@/domain/types';
+import type { RuntimeEndpoints } from '@/services/runtime/endpoints';
 
 function createMemoryStorage() {
   const map = new Map<string, string>();
@@ -43,79 +35,11 @@ function createMemoryStorage() {
   };
 }
 
-function createAnalyticsResponse<
-  T extends
-    | ConsumptionResponse
-    | DemandPeaksResponse
-    | ElectricalHealthResponse
-    | HourlyProfileResponse
-    | CurrentBySensorResponse,
->(response: T): T {
-  return response;
-}
-
-function createEndpoints(): ApiEndpoints {
-  return {
-    getChannelMeasurements: vi.fn(),
-    getSensorMeasurements: vi.fn(),
-    getConsumption: vi.fn().mockResolvedValue(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [{ sensor: 'freezer', total_kwh: 10, min_demand_kw: 1, max_demand_kw: 2 }],
-      }),
-    ),
-    getDemandPeaks: vi.fn().mockResolvedValue(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [{ sensor: 'freezer', peak_kw: 2, timestamp: '2026-04-07T00:00:00.000Z' }],
-      }),
-    ),
-    getElectricalHealth: vi.fn().mockResolvedValue(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [{ sensor: 'freezer', avg_voltage: 220, avg_power_factor: 0.95 }],
-      }),
-    ),
-    getHourlyProfile: vi.fn().mockResolvedValue(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [{ hour: '08', sensor: 'freezer', avg_power_kw: 12 }],
-      }),
-    ),
-    getCurrentBySensor: vi.fn().mockResolvedValue(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-01-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [{ sensor: 'freezer', avg_current: 5 }],
-      }),
-    ),
-  };
-}
-
-function measurementResponse(measurements: ChannelMeasurementsResponse['measurements']): ChannelMeasurementsResponse {
-  return {
-    channel: 'main',
-    from: measurements[0]?.timestamp ?? '2026-01-01T00:00:00.000Z',
-    to: measurements[measurements.length - 1]?.timestamp ?? '2026-01-01T00:00:00.000Z',
-    count: measurements.length,
-    measurements,
-  };
-}
-
-function createBackupSnapshot(channel = 'main'): BackupChannelSnapshot {
+function createBackupSnapshot(channel = 'lab'): BackupChannelSnapshot {
   return {
     channel,
-    generatedAt: '2026-04-09T14:06:48Z',
-    source: 'backup_2026-03-31.db',
+    generatedAt: '2026-04-10T09:41:00.000Z',
+    source: 'backup_2026-04-10.db',
     sensors: ['fase1', 'fase2', 'fase3'],
     latestMeasurementAt: '2026-03-31T10:24:17',
     measurementRange: {
@@ -237,328 +161,317 @@ function createBackupSnapshot(channel = 'main'): BackupChannelSnapshot {
   };
 }
 
+function createRuntimeEndpoints(): RuntimeEndpoints {
+  return {
+    getBootstrapSnapshot: vi.fn(),
+    getRecentMeasurements: vi.fn(),
+    getHistory: vi.fn(),
+  };
+}
+
+function createHistoryResponse(days: 7 | 30) {
+  const samples = Array.from({ length: days }, (_, index) => {
+    const date = new Date(2026, 3, 10 - (days - 1 - index), 18, 0, 0, 0);
+    const dateKey = [
+      String(date.getFullYear()).padStart(4, '0'),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    const measurementAt = `${dateKey}T18:57:07`;
+
+    return {
+      date: dateKey,
+      measurementAt,
+      measurements: [
+        {
+          channel: 'lab',
+          sensor: 'fase1',
+          apparent_power: 7,
+          active_power: 7 + index,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.09,
+          voltage: 127,
+          timestamp: measurementAt,
+        },
+        {
+          channel: 'lab',
+          sensor: 'fase2',
+          apparent_power: 4,
+          active_power: 4 + index,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.05,
+          voltage: 128,
+          timestamp: measurementAt,
+        },
+        {
+          channel: 'lab',
+          sensor: 'fase3',
+          apparent_power: 8,
+          active_power: 8 + index,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.07,
+          voltage: 129,
+          timestamp: measurementAt,
+        },
+      ],
+    };
+  });
+
+  return {
+    channel: 'lab',
+    days,
+    resolution: 'day' as const,
+    checkedAt: '2026-04-10T09:42:30.000Z',
+    samples,
+    message: `Historico diario atualizado com dados reais em ${days} de ${days} dias.`,
+  };
+}
+
 describe('SyncStrategy', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('detects whether a cold start is needed', () => {
+  it('hydrates the cold start from the renewable bootstrap snapshot', async () => {
     const storage = createMemoryStorage();
     const cacheManager = new CacheManager({ storage });
-    const syncStrategy = new SyncStrategy({
-      cacheManager,
-      endpoints: createEndpoints(),
+    const runtimeEndpoints = createRuntimeEndpoints();
+    const bundledSnapshot = createBackupSnapshot();
+    const renewedSnapshot = {
+      ...createBackupSnapshot(),
+      generatedAt: '2026-04-10T09:45:00.000Z',
+      source: 'runtime-refresh',
+    };
+
+    vi.mocked(runtimeEndpoints.getBootstrapSnapshot).mockResolvedValue({
+      channel: 'lab',
+      snapshot: renewedSnapshot,
+      snapshotStatus: 'renewed',
+      snapshotGeneratedAt: renewedSnapshot.generatedAt,
+      snapshotSource: renewedSnapshot.source,
+      latestMeasurementAt: renewedSnapshot.latestMeasurementAt,
+      refreshAttemptedAt: '2026-04-10T09:45:00.000Z',
+      refreshFinishedAt: '2026-04-10T09:45:03.000Z',
+      refreshDurationMs: 3000,
+      refreshError: null,
+      snapshotAgeHours: 240,
+      isSnapshotFreshEnough: false,
+      message: 'Backup renovado a partir da API.',
     });
 
-    expect(syncStrategy.needsColdStart('main')).toBe(true);
-    cacheManager.set(getMeasurementCacheKey('main'), [
-      {
-        channel: 'main',
-        sensor: 'freezer',
-        apparent_power: 1,
-        active_power: 1,
-        reactive_power: 1,
-        power_factor: 1,
-        current: 1,
-        voltage: 220,
-        timestamp: '2026-04-07T00:00:00.000Z',
-      },
-    ]);
-    expect(syncStrategy.needsColdStart('main')).toBe(false);
-  });
-
-  it('performs a cold start with a short recent raw window', async () => {
-    const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({ storage });
-    const endpoints = createEndpoints();
-    const channelMeasurements = endpoints.getChannelMeasurements as ReturnType<typeof vi.fn>;
-    channelMeasurements
-      .mockResolvedValueOnce(
-        measurementResponse([
-          {
-            channel: 'main',
-            sensor: 'freezer',
-            apparent_power: 12,
-            active_power: 12,
-            reactive_power: 1,
-            power_factor: 0.95,
-            current: 5,
-            voltage: 220,
-            timestamp: '2026-04-06T23:45:00.000Z',
-          },
-        ]),
-      );
     const progress: number[] = [];
     const syncStrategy = new SyncStrategy({
       cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T00:00:00.000Z'),
-      measurementCacheWindowHours: 1,
+      runtimeEndpoints,
+      backupSnapshotLoader: async () => bundledSnapshot,
+      now: () => new Date('2026-04-10T09:46:00.000Z'),
     });
 
-    await syncStrategy.coldStart('main', (value) => progress.push(value));
-
-    expect(channelMeasurements).toHaveBeenCalledTimes(1);
-    expect(cacheManager.get(getMeasurementCacheKey('main'))?.data).toHaveLength(1);
-    expect(progress[0]).toBe(0);
-    expect(progress[progress.length - 1]).toBe(100);
-  });
-
-  it('merges delta measurements with the cached payload', async () => {
-    const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({
-      storage,
-      now: () => new Date('2026-04-07T00:00:30.000Z'),
-    });
-    cacheManager.set(getMeasurementCacheKey('main'), [
-      {
-        channel: 'main',
-        sensor: 'freezer',
-        apparent_power: 10,
-        active_power: 10,
-        reactive_power: 1,
-        power_factor: 0.95,
-        current: 5,
-        voltage: 220,
-        timestamp: '2026-04-07T00:00:00.000Z',
-      },
-    ]);
-
-    const endpoints = createEndpoints();
-    const channelMeasurements = endpoints.getChannelMeasurements as ReturnType<typeof vi.fn>;
-    channelMeasurements.mockResolvedValue(
-      measurementResponse([
-        {
-          channel: 'main',
-          sensor: 'freezer',
-          apparent_power: 10,
-          active_power: 10,
-          reactive_power: 1,
-          power_factor: 0.95,
-          current: 5,
-          voltage: 220,
-          timestamp: '2026-04-07T00:00:00.000Z',
-        },
-        {
-          channel: 'main',
-          sensor: 'equipment',
-          apparent_power: 8,
-          active_power: 8,
-          reactive_power: 1,
-          power_factor: 0.95,
-          current: 4,
-          voltage: 219,
-          timestamp: '2026-04-07T00:01:00.000Z',
-        },
-      ]),
-    );
-    const syncStrategy = new SyncStrategy({
-      cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T00:02:00.000Z'),
+    await syncStrategy.coldStart('lab', (value) => {
+      progress.push(value);
     });
 
-    await syncStrategy.syncDelta('main');
-
-    expect(cacheManager.get(getMeasurementCacheKey('main'))?.data).toHaveLength(2);
-  });
-
-  it('falls back to the latest available API data when the recent delta is empty', async () => {
-    const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({
-      storage,
-      now: () => new Date('2026-04-07T00:00:30.000Z'),
-    });
-    cacheManager.set(getMeasurementCacheKey('main'), [
-      {
-        channel: 'main',
-        sensor: 'freezer',
-        apparent_power: 10,
-        active_power: 10,
-        reactive_power: 1,
-        power_factor: 0.95,
-        current: 5,
-        voltage: 220,
-        timestamp: '2026-03-01T00:00:00.000Z',
-      },
-    ]);
-
-    const endpoints = createEndpoints();
-    const channelMeasurements = endpoints.getChannelMeasurements as ReturnType<typeof vi.fn>;
-    channelMeasurements
-      .mockResolvedValueOnce(emptyWindowFixture)
-      .mockResolvedValueOnce(emptyWindowFixture)
-      .mockResolvedValueOnce(
-        measurementResponse([
-          {
-            channel: 'main',
-            sensor: 'equipment',
-            apparent_power: 8,
-            active_power: 8,
-            reactive_power: 1,
-            power_factor: 0.95,
-            current: 4,
-            voltage: 219,
-            timestamp: '2026-03-15T12:00:00.000Z',
-          },
-        ]),
-      );
-    const syncStrategy = new SyncStrategy({
-      cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T12:00:00.000Z'),
-      staleFallbackProbeOffsetsDays: [1, 30],
-    });
-
-    await syncStrategy.syncDelta('main');
-
-    expect(channelMeasurements).toHaveBeenCalledTimes(3);
-    expect(cacheManager.get(getMeasurementCacheKey('main'))?.data).toHaveLength(2);
+    expect(runtimeEndpoints.getBootstrapSnapshot).toHaveBeenCalledWith('lab');
+    expect(cacheManager.get(getMeasurementCacheKey('lab'))?.data).toHaveLength(3);
     expect(
-      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('main'))?.data,
-    ).toMatchObject({
-      status: 'fallback_stale',
-      dataSource: 'api',
-      latestMeasurementAt: '2026-03-15T12:00:00.000Z',
-    });
-  });
-
-  it('reuses the cached stale fallback state to avoid repeated historical searches', async () => {
-    const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({
-      storage,
-      now: () => new Date('2026-04-07T11:55:00.000Z'),
-    });
-    cacheManager.set(getMeasurementCacheKey('main'), [
-      {
-        channel: 'main',
-        sensor: 'freezer',
-        apparent_power: 10,
-        active_power: 10,
-        reactive_power: 1,
-        power_factor: 0.95,
-        current: 5,
-        voltage: 220,
-        timestamp: '2026-03-15T12:00:00.000Z',
-      },
-    ]);
-    cacheManager.set<MeasurementSyncState>(getMeasurementSyncStateCacheKey('main'), {
-      channel: 'main',
-      status: 'fallback_stale',
-      dataSource: 'api',
-      latestMeasurementAt: '2026-03-15T12:00:00.000Z',
-      lastFallbackCheckAt: '2026-04-07T11:50:00.000Z',
-      lastApiAttemptAt: '2026-04-07T11:50:00.000Z',
-      lastSuccessfulApiSyncAt: '2026-04-07T11:50:00.000Z',
-      backupSnapshotGeneratedAt: null,
-      message: 'API sem dados recentes; usando a ultima medicao disponivel em 2026-03-15T12:00:00.000Z.',
-    });
-
-    const endpoints = createEndpoints();
-    const channelMeasurements = endpoints.getChannelMeasurements as ReturnType<typeof vi.fn>;
-    channelMeasurements.mockResolvedValueOnce(measurementResponse([]));
-    const syncStrategy = new SyncStrategy({
-      cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T12:00:00.000Z'),
-      staleFallbackRecheckMs: 15 * 60 * 1000,
-      staleFallbackProbeOffsetsDays: [1, 30],
-    });
-
-    await syncStrategy.syncDelta('main');
-
-    expect(channelMeasurements).toHaveBeenCalledTimes(1);
-    expect(
-      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('main'))?.data,
-    ).toMatchObject({
-      status: 'fallback_stale',
-      dataSource: 'api',
-      latestMeasurementAt: '2026-03-15T12:00:00.000Z',
-    });
-  });
-
-  it('falls back to the bundled backup snapshot when the API is offline', async () => {
-    const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({ storage });
-    const endpoints = createEndpoints();
-    (endpoints.getChannelMeasurements as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error('offline'),
-    );
-    const syncStrategy = new SyncStrategy({
-      cacheManager,
-      endpoints,
-      backupSnapshotLoader: async () => createBackupSnapshot('main'),
-      now: () => new Date('2026-04-07T12:00:00.000Z'),
-    });
-
-    await expect(syncStrategy.coldStart('main')).rejects.toThrow(/backup local/i);
-
-    expect(cacheManager.get(getMeasurementCacheKey('main'))?.data).toHaveLength(3);
-    expect(cacheManager.get(getAnalyticsCacheKey('main', 'consumption'))?.data).toMatchObject({
-      results: [{ sensor: 'fase3', total_kwh: 120, min_demand_kw: 2, max_demand_kw: 7 }],
-    });
-    expect(
-      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('main'))?.data,
+      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('lab'))?.data,
     ).toMatchObject({
       status: 'backup',
       dataSource: 'backup',
       latestMeasurementAt: '2026-03-31T10:24:17',
-      backupSnapshotGeneratedAt: '2026-04-09T14:06:48Z',
+      backupSnapshotGeneratedAt: '2026-04-10T09:45:00.000Z',
+      backupSnapshotStatus: 'renewed',
+      backupRefreshDurationMs: 3000,
+      backupSnapshotAgeHours: 240,
+      message: 'Backup renovado a partir da API.',
     });
+    expect(progress).toEqual([0, 35, 100]);
   });
 
-  it('reuses analytics cache while the TTL is valid', async () => {
+  it('merges the recent delta into the backup baseline and promotes the source to hybrid', async () => {
     const storage = createMemoryStorage();
     const cacheManager = new CacheManager({ storage });
-    const endpoints = createEndpoints();
+    const runtimeEndpoints = createRuntimeEndpoints();
+    const snapshot = createBackupSnapshot();
+
+    vi.mocked(runtimeEndpoints.getBootstrapSnapshot).mockResolvedValue({
+      channel: 'lab',
+      snapshot,
+      snapshotStatus: 'renewed',
+      snapshotGeneratedAt: snapshot.generatedAt,
+      snapshotSource: snapshot.source,
+      latestMeasurementAt: snapshot.latestMeasurementAt,
+      refreshAttemptedAt: '2026-04-10T09:41:00.000Z',
+      refreshFinishedAt: '2026-04-10T09:41:04.000Z',
+      refreshDurationMs: 4000,
+      refreshError: null,
+      snapshotAgeHours: 240,
+      isSnapshotFreshEnough: false,
+      message: 'Backup renovado a partir da API.',
+    });
+    vi.mocked(runtimeEndpoints.getRecentMeasurements).mockResolvedValue({
+      channel: 'lab',
+      measurements: [
+        {
+          channel: 'lab',
+          sensor: 'fase1',
+          apparent_power: 7,
+          active_power: 7,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.09,
+          voltage: 127,
+          timestamp: '2026-04-10T09:42:07',
+        },
+        {
+          channel: 'lab',
+          sensor: 'fase2',
+          apparent_power: 4,
+          active_power: 4,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.05,
+          voltage: 128,
+          timestamp: '2026-04-10T09:42:07',
+        },
+        {
+          channel: 'lab',
+          sensor: 'fase3',
+          apparent_power: 8,
+          active_power: 8,
+          reactive_power: 1,
+          power_factor: 0.95,
+          current: 0.07,
+          voltage: 129,
+          timestamp: '2026-04-10T09:42:07',
+        },
+      ],
+      anchorAt: '2026-04-10T09:42:07',
+      checkedAt: '2026-04-10T09:42:30.000Z',
+      probeWindow: {
+        from: '2026-04-10T09:12:07',
+        to: '2026-04-10T09:42:07',
+      },
+      source: 'recent_window',
+      message: 'Dados recentes encontrados em 2026-04-10T09:42:07.',
+    });
+    vi.mocked(runtimeEndpoints.getHistory)
+      .mockResolvedValueOnce(createHistoryResponse(7))
+      .mockResolvedValueOnce(createHistoryResponse(30));
+
     const syncStrategy = new SyncStrategy({
       cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T00:00:00.000Z'),
-      analyticsTtlMs: 60 * 60 * 1000,
+      runtimeEndpoints,
+      backupSnapshotLoader: async () => snapshot,
+      now: () => new Date('2026-04-10T09:42:30'),
     });
 
-    await syncStrategy.syncAnalytics('main');
-    await syncStrategy.syncAnalytics('main');
+    await syncStrategy.coldStart('lab');
+    await syncStrategy.syncDelta('lab');
 
-    expect(endpoints.getConsumption).toHaveBeenCalledTimes(1);
-    expect(endpoints.getDemandPeaks).toHaveBeenCalledTimes(1);
-    expect(cacheManager.get(getAnalyticsCacheKey('main', 'hourly_profile'))).not.toBeNull();
+    expect(runtimeEndpoints.getRecentMeasurements).toHaveBeenCalledWith('lab', {
+      lastKnownAt: '2026-03-31T10:24:17',
+      shouldProbe: true,
+    });
+    expect(runtimeEndpoints.getHistory).toHaveBeenNthCalledWith(1, 'lab', 7);
+    expect(runtimeEndpoints.getHistory).toHaveBeenNthCalledWith(2, 'lab', 30);
+    expect(cacheManager.get(getMeasurementCacheKey('lab'))?.data).toHaveLength(3);
+    expect(
+      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('lab'))?.data,
+    ).toMatchObject({
+      status: 'fresh',
+      dataSource: 'hybrid',
+      latestMeasurementAt: '2026-04-10T09:42:07',
+      recentAnchorAt: '2026-04-10T09:42:07',
+      recentWindowFrom: '2026-04-10T09:12:07',
+      recentWindowTo: '2026-04-10T09:42:07',
+      backupSnapshotGeneratedAt: '2026-04-10T09:41:00.000Z',
+      backupSnapshotStatus: 'renewed',
+    });
+    expect(
+      cacheManager.get(getOperationalHistoryCacheKey('lab', '24h'))?.data,
+    ).toMatchObject({
+      anchorMeasurementAt: '2026-04-10T09:42:07',
+    });
+    expect(
+      cacheManager.get<OperationalHistoryCachePayload>(
+        getOperationalHistoryCacheKey('lab', '7d'),
+      )?.data.points,
+    ).toHaveLength(7);
+    expect(
+      cacheManager.get<OperationalHistoryCachePayload>(
+        getOperationalHistoryCacheKey('lab', '30d'),
+      )?.data.points,
+    ).toHaveLength(30);
   });
 
-  it('keeps the previous analytics payload when the backend returns empty results', async () => {
+  it('keeps the backup baseline alive when no recent measurements are found', async () => {
     const storage = createMemoryStorage();
-    const cacheManager = new CacheManager({
-      storage,
-      now: () => new Date('2026-04-07T00:00:00.000Z'),
-    });
-    cacheManager.set(getAnalyticsCacheKey('main', 'consumption'), {
-      channel: 'main',
-      from: '2026-03-01T00:00:00.000Z',
-      to: '2026-03-31T23:59:59.999Z',
-      results: [{ sensor: 'freezer', total_kwh: 42, min_demand_kw: 1, max_demand_kw: 3 }],
-    });
+    const cacheManager = new CacheManager({ storage });
+    const runtimeEndpoints = createRuntimeEndpoints();
+    const snapshot = createBackupSnapshot();
 
-    const endpoints = createEndpoints();
-    (endpoints.getConsumption as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      createAnalyticsResponse({
-        channel: 'main',
-        from: '2026-04-01T00:00:00.000Z',
-        to: '2026-04-07T00:00:00.000Z',
-        results: [],
-      }),
-    );
+    vi.mocked(runtimeEndpoints.getBootstrapSnapshot).mockResolvedValue({
+      channel: 'lab',
+      snapshot,
+      snapshotStatus: 'bundled',
+      snapshotGeneratedAt: snapshot.generatedAt,
+      snapshotSource: snapshot.source,
+      latestMeasurementAt: snapshot.latestMeasurementAt,
+      refreshAttemptedAt: '2026-04-10T09:42:00.000Z',
+      refreshFinishedAt: '2026-04-10T09:42:02.000Z',
+      refreshDurationMs: 2000,
+      refreshError: 'This operation was aborted',
+      snapshotAgeHours: 240,
+      isSnapshotFreshEnough: false,
+      message: 'Snapshot empacotado carregado.',
+    });
+    vi.mocked(runtimeEndpoints.getRecentMeasurements).mockResolvedValue({
+      channel: 'lab',
+      measurements: [],
+      anchorAt: '2026-03-31T10:24:17',
+      checkedAt: '2026-04-10T09:42:30.000Z',
+      probeWindow: null,
+      source: 'empty',
+      message: 'Sem dados novos nas ultimas 72 horas.',
+    });
+    vi.mocked(runtimeEndpoints.getHistory)
+      .mockResolvedValueOnce(createHistoryResponse(7))
+      .mockResolvedValueOnce(createHistoryResponse(30));
+
     const syncStrategy = new SyncStrategy({
       cacheManager,
-      endpoints,
-      now: () => new Date('2026-04-07T00:00:00.000Z'),
-      analyticsTtlMs: 0,
+      runtimeEndpoints,
+      backupSnapshotLoader: async () => snapshot,
+      now: () => new Date('2026-04-10T09:42:30'),
     });
 
-    await syncStrategy.syncAnalytics('main');
+    await syncStrategy.coldStart('lab');
+    await syncStrategy.syncDelta('lab');
 
-    expect(cacheManager.get(getAnalyticsCacheKey('main', 'consumption'))?.data).toMatchObject({
-      results: [{ sensor: 'freezer', total_kwh: 42, min_demand_kw: 1, max_demand_kw: 3 }],
+    expect(
+      cacheManager.get<MeasurementSyncState>(getMeasurementSyncStateCacheKey('lab'))?.data,
+    ).toMatchObject({
+      status: 'fallback_stale',
+      dataSource: 'backup',
+      latestMeasurementAt: '2026-03-31T10:24:17',
+      lastFallbackCheckAt: '2026-04-10T09:42:30.000Z',
+      backupSnapshotStatus: 'bundled',
+      backupRefreshError: 'This operation was aborted',
+      message: 'Sem dados novos nas ultimas 72 horas.',
     });
+    expect(
+      cacheManager.get<OperationalHistoryCachePayload>(
+        getOperationalHistoryCacheKey('lab', '7d'),
+      )?.data.points,
+    ).toHaveLength(7);
+    expect(
+      cacheManager.get<OperationalHistoryCachePayload>(
+        getOperationalHistoryCacheKey('lab', '30d'),
+      )?.data.points,
+    ).toHaveLength(30);
   });
 });
