@@ -1,6 +1,6 @@
 {
   "captured_at": "2026-04-07T11:44:29-03:00",
-  "api_base_url": "https://bor.gs/tcc",
+  "api_base_url": "http://143.107.102.8:8090",
   "files": [
     "channel-lab-1min.json",
     "sensor-lab-fase1-1min.json",

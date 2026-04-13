@@ -15,6 +15,8 @@ export class ApiError extends Error {
 
 type FetchLike = typeof fetch;
 
+const fetchMod = window.fetch.bind(window)
+
 interface ApiClientOptions {
   baseUrl?: string;
   timeout?: number;
@@ -94,7 +96,7 @@ export class ApiClient {
       const timeoutId = window.setTimeout(() => controller.abort(), this.timeout);
 
       try {
-        const response = await this.fetchFn(url.toString(), {
+        const response = await fetchMod(url.toString(), {
           method: 'GET',
           headers: {
             Accept: 'application/json',

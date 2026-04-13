@@ -6,7 +6,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-BASE_URL = "https://bor.gs/tcc"
+BASE_URL = "http://143.107.102.8:8090"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -14,7 +14,7 @@ HEADERS = {
         "Chrome/135.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json,text/plain,*/*",
-    "Referer": "https://bor.gs/tcc/docs",
+    "Referer": "http://143.107.102.8:8090/docs",
 }
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "fixtures"

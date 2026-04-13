@@ -38,8 +38,8 @@ Comece por estes arquivos:
 
 ### 1. A API real nao e `localhost`
 
-- Base real: `https://bor.gs/tcc`
-- OpenAPI real: `https://bor.gs/tcc/openapi.json`
+- Base real: `http://143.107.102.8:8090`
+- OpenAPI real: `http://143.107.102.8:8090/openapi.json`
 
 Implicacao:
 

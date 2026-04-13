@@ -2,13 +2,13 @@
 
 Atualizado em `2026-04-07T11:35:53-03:00`.
 
-Esta pasta consolida o que foi validado na pratica na API `MQTT Measurements API` publicada em `https://bor.gs/tcc`.
+Esta pasta consolida o que foi validado na pratica na API `MQTT Measurements API` publicada em `http://143.107.102.8:8090`.
 O objetivo aqui e complementar o `PLANEJAMENTO_SPRINTS.md` com comportamento real de producao, fixtures reaproveitaveis e decisoes de design para as proximas sprints.
 
 ## Resumo executivo
 
-- Base real da API: `https://bor.gs/tcc`
-- Swagger vivo: `https://bor.gs/tcc/openapi.json`
+- Base real da API: `http://143.107.102.8:8090`
+- Swagger vivo: `http://143.107.102.8:8090/openapi.json`
 - Nao ha autenticacao declarada no OpenAPI
 - O Swagger vivo tem um endpoint extra nao mapeado no planejamento atual: `GET /analytics/{channel}/voltage_anomalies`
 - O endpoint `GET /backup/download` nao devolve JSON como o OpenAPI sugere; ele devolve um arquivo SQLite real (`application/octet-stream`)

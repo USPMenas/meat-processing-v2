@@ -1,5 +1,5 @@
 export const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.trim() || 'https://bor.gs/tcc';
+  import.meta.env.VITE_API_BASE_URL?.trim() || 'http://143.107.102.8:8090';
 export const TIMEOUT_MS = 10_000;
 export const RETRY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000]);
 export const RETRY_ATTEMPTS = RETRY_DELAYS_MS.length;
