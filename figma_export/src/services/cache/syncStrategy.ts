@@ -32,8 +32,8 @@ interface SyncStrategyOptions {
   measurementCacheWindowHours?: number;
   analyticsWindowDays?: number;
   staleFallbackRecheckMs?: number;
-  staleFallbackProbeOffsetsDays?: readonly number[];
-  staleFallbackProbeWindowHours?: number;
+  staleFallbackLookbackHours?: number;
+  staleFallbackBlockHours?: number;
 }
 
 const OPERATIONAL_HISTORY_CONFIG: Record<
@@ -172,9 +172,9 @@ export class SyncStrategy {
 
   private staleFallbackRecheckMs: number;
 
-  private staleFallbackProbeOffsetsDays: readonly number[];
+  private staleFallbackLookbackHours: number;
 
-  private staleFallbackProbeWindowHours: number;
+  private staleFallbackBlockHours: number;
 
   constructor(options: SyncStrategyOptions = {}) {
     this.cacheManager = options.cacheManager ?? cacheManager;
@@ -187,10 +187,10 @@ export class SyncStrategy {
     this.analyticsWindowDays = options.analyticsWindowDays ?? API_CONFIG.analyticsWindowDays;
     this.staleFallbackRecheckMs =
       options.staleFallbackRecheckMs ?? API_CONFIG.staleFallbackRecheckMs;
-    this.staleFallbackProbeOffsetsDays =
-      options.staleFallbackProbeOffsetsDays ?? API_CONFIG.staleFallbackProbeOffsetsDays;
-    this.staleFallbackProbeWindowHours =
-      options.staleFallbackProbeWindowHours ?? API_CONFIG.staleFallbackProbeWindowHours;
+    this.staleFallbackLookbackHours =
+      options.staleFallbackLookbackHours ?? API_CONFIG.staleFallbackLookbackHours;
+    this.staleFallbackBlockHours =
+      options.staleFallbackBlockHours ?? API_CONFIG.staleFallbackBlockHours;
   }
 
   needsColdStart(channel: string): boolean {
@@ -523,9 +523,13 @@ export class SyncStrategy {
       };
     }
 
-    for (const offsetDays of this.staleFallbackProbeOffsetsDays) {
-      const probeStart = subtractDays(now, offsetDays);
-      const probeEnd = addHours(probeStart, this.staleFallbackProbeWindowHours);
+    for (
+      let offsetHours = 0;
+      offsetHours < this.staleFallbackLookbackHours;
+      offsetHours += this.staleFallbackBlockHours
+    ) {
+      const probeEnd = subtractHours(now, offsetHours);
+      const probeStart = subtractHours(probeEnd, this.staleFallbackBlockHours);
       const response = await this.endpoints.getChannelMeasurements(
         channel,
         probeStart.toISOString(),

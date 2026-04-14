@@ -166,7 +166,7 @@ function createBackupSnapshot(channel = 'main'): BackupChannelSnapshot {
             {
               freezerEnergy: 6,
               equipmentEnergy: 8,
-              temperature: -19,
+              temperature: -1.05,
               occupancy: 62,
               timestamp: '2026-03-31T10:24:17',
             },
@@ -179,7 +179,7 @@ function createBackupSnapshot(channel = 'main'): BackupChannelSnapshot {
             {
               freezerEnergy: 6,
               equipmentEnergy: 8,
-              temperature: -19,
+              temperature: -1.05,
               occupancy: 62,
               timestamp: '2026-03-31T10:24:17',
             },
@@ -192,7 +192,7 @@ function createBackupSnapshot(channel = 'main'): BackupChannelSnapshot {
             {
               freezerEnergy: 6,
               equipmentEnergy: 8,
-              temperature: -19,
+              temperature: -1.05,
               occupancy: 62,
               timestamp: '2026-03-31T10:24:17',
             },
@@ -399,7 +399,7 @@ describe('SyncStrategy', () => {
             power_factor: 0.95,
             current: 4,
             voltage: 219,
-            timestamp: '2026-03-15T12:00:00.000Z',
+            timestamp: '2026-04-07T05:30:00.000Z',
           },
         ]),
       );
@@ -407,7 +407,8 @@ describe('SyncStrategy', () => {
       cacheManager,
       endpoints,
       now: () => new Date('2026-04-07T12:00:00.000Z'),
-      staleFallbackProbeOffsetsDays: [1, 30],
+      staleFallbackLookbackHours: 48,
+      staleFallbackBlockHours: 6,
     });
 
     await syncStrategy.syncDelta('main');
@@ -419,7 +420,7 @@ describe('SyncStrategy', () => {
     ).toMatchObject({
       status: 'fallback_stale',
       dataSource: 'api',
-      latestMeasurementAt: '2026-03-15T12:00:00.000Z',
+      latestMeasurementAt: '2026-04-07T05:30:00.000Z',
     });
   });
 
@@ -462,7 +463,8 @@ describe('SyncStrategy', () => {
       endpoints,
       now: () => new Date('2026-04-07T12:00:00.000Z'),
       staleFallbackRecheckMs: 15 * 60 * 1000,
-      staleFallbackProbeOffsetsDays: [1, 30],
+      staleFallbackLookbackHours: 48,
+      staleFallbackBlockHours: 6,
     });
 
     await syncStrategy.syncDelta('main');

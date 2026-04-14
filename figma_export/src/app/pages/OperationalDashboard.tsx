@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { FRIGORIFICO_CHANNEL } from '../../config/channels';
 import { getPeriodLabel } from '../../config/periods';
+import { DEFAULT_TEMPERATURE_CONFIG } from '../../domain/constants/dashboard';
 import { DEFAULT_THRESHOLD_CONFIG } from '../../domain/constants/thresholds';
 import { useCacheSync } from '../../hooks/useCacheSync';
 import { useDashboardPeriod } from '../../hooks/useDashboardPeriod';
@@ -99,6 +100,11 @@ function MetricInfo({
     </>
   );
 }
+
+const TEMPERATURE_CHART_DOMAIN: [number, number] = [
+  DEFAULT_TEMPERATURE_CONFIG.minTemperature,
+  DEFAULT_TEMPERATURE_CONFIG.maxTemperature,
+];
 
 export default function OperationalDashboard() {
   const channel = FRIGORIFICO_CHANNEL;
@@ -412,6 +418,7 @@ export default function OperationalDashboard() {
               miniChartDataKey="temperature"
               miniChartColor="#8b5cf6"
               miniChartType="line"
+              miniChartDomain={TEMPERATURE_CHART_DOMAIN}
               infoTitle="Como calculamos a temperatura"
               infoContent={
                 <MetricInfo
@@ -432,6 +439,7 @@ export default function OperationalDashboard() {
               detailContent={
                 <TimeSeriesChart
                   data={chartSeries}
+                  yAxisDomain={TEMPERATURE_CHART_DOMAIN}
                   lines={[
                     {
                       dataKey: 'temperature',

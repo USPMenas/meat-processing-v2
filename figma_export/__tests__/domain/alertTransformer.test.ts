@@ -5,7 +5,7 @@ describe('alertTransformer', () => {
   it('raises a critical temperature alert', () => {
     const alerts = checkAlerts(
       {
-        temperature: -15,
+        temperature: 0.5,
         freezerEnergy: 10,
         occupancy: 60,
       },

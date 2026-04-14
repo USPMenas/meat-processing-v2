@@ -35,6 +35,14 @@ function normalizeBaseUrl(baseUrl: string): string {
     return '/api';
   }
 
+  if (
+    /^http:\/\//i.test(trimmed) &&
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:'
+  ) {
+    return '/api';
+  }
+
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed.replace(/\/+$/, '');
   }

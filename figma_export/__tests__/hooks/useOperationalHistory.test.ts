@@ -53,7 +53,7 @@ describe('useOperationalHistory', () => {
         {
           freezerEnergy: 5.8,
           equipmentEnergy: 5.7,
-          temperature: -19.2,
+          temperature: -1.15,
           occupancy: 11,
           timestamp: '2026-03-31T11:40:56',
         },
@@ -83,7 +83,7 @@ describe('useOperationalHistory', () => {
             {
               freezerEnergy: 6,
               equipmentEnergy: 4.5,
-              temperature: -18.5,
+              temperature: -1.05,
               occupancy: 30,
               timestamp: '2026-03-31T11:40:56',
             },
@@ -123,6 +123,6 @@ describe('useOperationalHistory', () => {
 
     expect(syncSpy).toHaveBeenCalledWith('lab', '7d');
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data[0]?.temperature).toBe(-18.5);
+    expect(result.current.data[0]?.temperature).toBe(-1.05);
   });
 });

@@ -254,7 +254,7 @@ describe('integration: data flow', () => {
             power_factor: 0.95,
             current: 5,
             voltage: 220,
-            timestamp: '2026-03-15T12:00:00.000Z',
+            timestamp: '2026-04-07T05:30:00.000Z',
           },
         ]),
       );
@@ -263,7 +263,8 @@ describe('integration: data flow', () => {
       cacheManager,
       endpoints,
       now: () => new Date('2026-04-07T12:00:00.000Z'),
-      staleFallbackProbeOffsetsDays: [1, 30],
+      staleFallbackLookbackHours: 48,
+      staleFallbackBlockHours: 6,
     });
 
     await syncStrategy.syncDelta('main');
@@ -283,7 +284,7 @@ describe('integration: data flow', () => {
     ).toMatchObject({
       status: 'fallback_stale',
       dataSource: 'api',
-      latestMeasurementAt: '2026-03-15T12:00:00.000Z',
+      latestMeasurementAt: '2026-04-07T05:30:00.000Z',
     });
   });
 });

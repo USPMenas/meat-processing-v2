@@ -14,8 +14,8 @@ describe('api endpoints', () => {
     );
 
     expect(client.get).toHaveBeenCalledWith('/main-channel', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
   });
 
@@ -33,8 +33,8 @@ describe('api endpoints', () => {
     );
 
     expect(client.get).toHaveBeenCalledWith('/main%20channel/freezer%20sensor', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
   });
 
@@ -52,20 +52,20 @@ describe('api endpoints', () => {
 
     expect(client.get).toHaveBeenNthCalledWith(1, '/analytics/main/consumption', undefined);
     expect(client.get).toHaveBeenNthCalledWith(2, '/analytics/main/demand_peaks', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
     expect(client.get).toHaveBeenNthCalledWith(3, '/analytics/main/electrical_health', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
     expect(client.get).toHaveBeenNthCalledWith(4, '/analytics/main/hourly_profile', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
     expect(client.get).toHaveBeenNthCalledWith(5, '/analytics/main/current_by_sensor', {
-      from_time: '2026-04-01T00:00:00.000Z',
-      to_time: '2026-04-07T00:00:00.000Z',
+      from_time: '2026-04-01T00:00:00',
+      to_time: '2026-04-07T00:00:00',
     });
   });
 });

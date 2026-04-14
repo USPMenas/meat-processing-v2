@@ -24,6 +24,19 @@ function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
 }
 
+function formatDate(dateString?: string): string | undefined {
+  if (!dateString) {
+    return undefined;
+  }
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError(`Invalid date value: ${dateString}`);
+  }
+
+  return date.toISOString().replace(/\.\d{3}Z$/, '');
+}
+
 export interface ApiEndpoints {
   getChannelMeasurements: (
     channel: string,
@@ -61,16 +74,6 @@ export interface ApiEndpoints {
     fromTime?: string,
     toTime?: string,
   ) => Promise<CurrentBySensorResponse>;
-}
-
-function formatDate(dateString) {
-  const date = new Date(dateString)
-  let time_string = date.toISOString()
-  let hours_string = date.getHours().toString().padStart(2, "0")
-  let minutes_string = date.getMinutes().toString().padStart(2, "0")
-  let seconds_string = date.getSeconds().toString().padStart(2, "0")
-  time_string = time_string.slice(0, 11) + hours_string + ":" + minutes_string + ":" + seconds_string 
-  return time_string
 }
 
 export function createApiEndpoints(client: ApiClient): ApiEndpoints {

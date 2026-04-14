@@ -20,11 +20,11 @@ PERIOD_CONFIG = {
     "30d": {"hours": 30 * 24, "bucket_minutes": 360},
 }
 TEMPERATURE_CONFIG = {
-    "baseTemperature": -18.0,
+    "baseTemperature": 0.0,
     "avgPower": 7.95,
     "sensitivityFactor": 2.5 / (10.0 - 5.36),
-    "minTemperature": -22.0,
-    "maxTemperature": -14.0,
+    "minTemperature": -5.0,
+    "maxTemperature": 2.0,
 }
 OCCUPANCY_CONFIG = {
     "baseOccupancy": 10.0,

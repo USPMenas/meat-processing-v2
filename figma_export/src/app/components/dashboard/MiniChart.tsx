@@ -1,4 +1,4 @@
-import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, AreaChart, Area, YAxis } from 'recharts';
 
 type ChartPoint = object;
 
@@ -7,13 +7,21 @@ interface MiniChartProps {
   dataKey: string;
   color: string;
   type?: 'line' | 'area';
+  domain?: [number, number];
 }
 
-export function MiniChart({ data, dataKey, color, type = 'line' }: MiniChartProps) {
+export function MiniChart({
+  data,
+  dataKey,
+  color,
+  type = 'line',
+  domain,
+}: MiniChartProps) {
   return (
     <ResponsiveContainer width="100%" height={40}>
       {type === 'area' ? (
         <AreaChart data={data}>
+          <YAxis hide domain={domain} />
           <Area
             type="monotone"
             dataKey={dataKey}
@@ -27,6 +35,7 @@ export function MiniChart({ data, dataKey, color, type = 'line' }: MiniChartProp
         </AreaChart>
       ) : (
         <LineChart data={data}>
+          <YAxis hide domain={domain} />
           <Line
             type="monotone"
             dataKey={dataKey}

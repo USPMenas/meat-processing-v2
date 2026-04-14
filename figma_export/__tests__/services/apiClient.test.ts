@@ -83,6 +83,36 @@ describe('ApiClient', () => {
     );
   });
 
+  it('falls back to the same-origin proxy when an insecure absolute base URL is injected on HTTPS pages', async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      value: new URL('https://meat-processing-v2.vercel.app/'),
+      configurable: true,
+    });
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const client = new ApiClient({
+      baseUrl: 'http://143.107.102.8:8090',
+      fetchFn,
+      retryDelaysMs: [],
+    });
+
+    await expect(client.get<{ ok: boolean }>('/lab')).resolves.toEqual({ ok: true });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      'https://meat-processing-v2.vercel.app/api/lab',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      configurable: true,
+    });
+  });
+
   it('retries with exponential backoff and eventually succeeds', async () => {
     const fetchFn = vi
       .fn()

@@ -28,6 +28,7 @@ interface TimeSeriesChartProps {
   showLegend?: boolean;
   variant?: 'default' | 'business';
   period?: OperationalChartPeriod;
+  yAxisDomain?: [number, number];
 }
 
 function formatDateTick(
@@ -53,6 +54,7 @@ export function TimeSeriesChart({
   showLegend = true,
   variant = 'default',
   period = '24h',
+  yAxisDomain,
 }: TimeSeriesChartProps) {
   const formatXAxis = (value: unknown) => {
     if (value instanceof Date) {
@@ -79,6 +81,7 @@ export function TimeSeriesChart({
           minTickGap={16}
         />
         <YAxis
+          domain={yAxisDomain}
           label={
             yAxisLabel
               ? { value: yAxisLabel, angle: -90, position: 'insideLeft' }

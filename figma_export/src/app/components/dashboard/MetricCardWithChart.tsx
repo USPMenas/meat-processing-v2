@@ -26,6 +26,7 @@ interface MetricCardWithChartProps {
   miniChartDataKey?: string;
   miniChartColor?: string;
   miniChartType?: 'line' | 'area';
+  miniChartDomain?: [number, number];
   detailContent?: ReactNode;
   detailTitle?: string;
   subtitle?: string;
@@ -46,6 +47,7 @@ export function MetricCardWithChart({
   miniChartDataKey,
   miniChartColor = '#3b82f6',
   miniChartType = 'line',
+  miniChartDomain,
   detailContent,
   detailTitle,
   subtitle,
@@ -152,6 +154,7 @@ export function MetricCardWithChart({
               dataKey={miniChartDataKey}
               color={miniChartColor}
               type={miniChartType}
+              domain={miniChartDomain}
             />
           </div>
         )}

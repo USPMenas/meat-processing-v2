@@ -1,3 +1,4 @@
+import { DEFAULT_TEMPERATURE_CONFIG } from '../constants/dashboard';
 import type { ApiMeasurement, OccupancyConfig, OperationalData, SensorMap, TemperatureConfig } from '../types';
 import { getEnergyTimeSeries } from './energyTransformer';
 import { getOccupancyTimeSeries } from './occupancyTransformer';
@@ -43,7 +44,10 @@ function clampOccupancy(value: number): number {
 }
 
 function clampTemperature(value: number): number {
-  return Math.min(Math.max(value, -25), -10);
+  return Math.min(
+    Math.max(value, DEFAULT_TEMPERATURE_CONFIG.minTemperature),
+    DEFAULT_TEMPERATURE_CONFIG.maxTemperature,
+  );
 }
 
 export function buildPredictionSeries(series: OperationalData[], points = 60): OperationalData[] {

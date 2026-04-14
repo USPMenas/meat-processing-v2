@@ -32,14 +32,14 @@ const measurements: ApiMeasurement[] = [
 
 describe('temperatureTransformer', () => {
   it('derives a deterministic freezer temperature from power', () => {
-    expect(deriveTemperature(15, { ...DEFAULT_TEMPERATURE_CONFIG })).toBe(-14.2);
+    expect(deriveTemperature(15, { ...DEFAULT_TEMPERATURE_CONFIG })).toBe(2);
   });
 
   it('builds a deterministic temperature time series', () => {
     expect(getTemperatureTimeSeries(measurements, { ...DEFAULT_TEMPERATURE_CONFIG })).toEqual([
       {
         timestamp: new Date(2026, 3, 7, 10, 0, 0),
-        temperature: -14.2,
+        temperature: 2,
       },
     ]);
   });
