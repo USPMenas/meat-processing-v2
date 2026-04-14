@@ -8,6 +8,12 @@ O sistema consome medições elétricas da API do laboratório, aplica regras de
 - `Logística`: custo energético por horário, ocupação e janelas operacionais.
 - `Negócios`: receita estimada, custos, perdas e margem operacional.
 
+## Grupo:
+Rafael de Almeida Innecco — 12550535
+Hélcio Prado de Lima — 10770238
+Rafael Menas Tamasi — 12553775
+Guilherme Seiki Kobayashi Kiyama — 10772904
+
 ## Estrutura do projeto
 
 O código principal da aplicação está na pasta:
