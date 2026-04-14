@@ -6,12 +6,12 @@ export const DEFAULT_SENSOR_MAP: Readonly<SensorMap> = Object.freeze({
 });
 
 export const DEFAULT_TEMPERATURE_CONFIG: Readonly<TemperatureConfig> = Object.freeze({
-  baseTemperature: -18,
+  baseTemperature: 0,
   avgPower: 7.95,
   sensitivityFactor: 2.5 / (10 - 5.36),
   noiseAmplitude: 0,
-  minTemperature: -22,
-  maxTemperature: -14,
+  minTemperature: -5,
+  maxTemperature: 2,
   sourceSensorIds: ['fase3'],
 });
 

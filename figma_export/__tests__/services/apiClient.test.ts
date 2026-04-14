@@ -24,6 +24,65 @@ describe('ApiClient', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
+  it('uses a same-origin /api base path when configured with a relative prefix', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const client = new ApiClient({
+      baseUrl: '/api',
+      fetchFn,
+      retryDelaysMs: [],
+    });
+
+    await expect(
+      client.get<{ ok: boolean }>('/lab', {
+        from_time: '2026-04-13T19:49:41',
+        to_time: '2026-04-13T20:49:41',
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      new URL(
+        '/api/lab?from_time=2026-04-13T19%3A49%3A41&to_time=2026-04-13T20%3A49%3A41',
+        window.location.origin,
+      ).toString(),
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      }),
+    );
+  });
+
+  it('preserves analytics routes under the same-origin /api prefix', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [] }), { status: 200 }),
+    );
+    const client = new ApiClient({
+      baseUrl: '/api',
+      fetchFn,
+      retryDelaysMs: [],
+    });
+
+    await expect(
+      client.get<{ results: unknown[] }>('/analytics/lab/consumption', {
+        from_time: '2026-04-12T19:49:41',
+        to_time: '2026-04-13T20:49:41',
+      }),
+    ).resolves.toEqual({ results: [] });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      new URL(
+        '/api/analytics/lab/consumption?from_time=2026-04-12T19%3A49%3A41&to_time=2026-04-13T20%3A49%3A41',
+        window.location.origin,
+      ).toString(),
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
   it('retries with exponential backoff and eventually succeeds', async () => {
     const fetchFn = vi
       .fn()

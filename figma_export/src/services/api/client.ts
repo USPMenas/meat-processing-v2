@@ -15,8 +15,6 @@ export class ApiError extends Error {
 
 type FetchLike = typeof fetch;
 
-const fetchMod = window.fetch.bind(window)
-
 interface ApiClientOptions {
   baseUrl?: string;
   timeout?: number;
@@ -29,6 +27,34 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (trimmed.length === 0) {
+    return '/api';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/+$/, '');
+  }
+
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+}
+
+function buildRequestUrl(baseUrl: string, endpoint: string): URL {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+
+  if (/^https?:\/\//i.test(normalizedBaseUrl)) {
+    return new URL(normalizedEndpoint, `${normalizedBaseUrl}/`);
+  }
+
+  return new URL(
+    `${normalizedBaseUrl}${normalizedEndpoint}`,
+    window.location.origin,
+  );
 }
 
 function shouldRetry(
@@ -75,15 +101,15 @@ export class ApiClient {
   private sleep: (ms: number) => Promise<void>;
 
   constructor(options: ApiClientOptions = {}) {
-    this.baseUrl = options.baseUrl ?? API_CONFIG.baseUrl;
+    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? API_CONFIG.baseUrl);
     this.timeout = options.timeout ?? API_CONFIG.timeoutMs;
     this.retryDelaysMs = options.retryDelaysMs ?? API_CONFIG.retryDelaysMs;
-    this.fetchFn = options.fetchFn ?? fetch;
+    this.fetchFn = options.fetchFn ?? globalThis.fetch.bind(globalThis);
     this.sleep = options.sleep ?? defaultSleep;
   }
 
   async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
-    const url = new URL(endpoint, this.baseUrl);
+    const url = buildRequestUrl(this.baseUrl, endpoint);
 
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -96,7 +122,7 @@ export class ApiClient {
       const timeoutId = window.setTimeout(() => controller.abort(), this.timeout);
 
       try {
-        const response = await fetchMod(url.toString(), {
+        const response = await this.fetchFn(url.toString(), {
           method: 'GET',
           headers: {
             Accept: 'application/json',

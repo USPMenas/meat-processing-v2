@@ -21,11 +21,12 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
   server: {
     proxy: {
-    '/lab': {
-      target: 'http://143.107.102.8:8090',
-      changeOrigin: true,
-      secure: false,
+      '/api': {
+        target: 'http://143.107.102.8:8090',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (requestPath) => requestPath.replace(/^\/api/, ''),
+      },
     },
-  }
-  }
+  },
 })
