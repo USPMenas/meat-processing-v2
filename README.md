@@ -9,10 +9,14 @@ O sistema consome medições elétricas da API do laboratório, aplica regras de
 - `Negócios`: receita estimada, custos, perdas e margem operacional.
 
 ## Grupo:
-Rafael de Almeida Innecco — 12550535
-Hélcio Prado de Lima — 10770238
-Rafael Menas Tamasi — 12553775
-Guilherme Seiki Kobayashi Kiyama — 10772904
+- Rafael de Almeida Innecco — 12550535
+
+- Hélcio Prado de Lima — 10770238
+
+- Rafael Menas Tamasi — 12553775
+
+- Guilherme Seiki Kobayashi Kiyama — 10772904
+
 
 ## Estrutura do projeto
 
