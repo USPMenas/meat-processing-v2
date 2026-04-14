@@ -22,6 +22,12 @@ describe('backup snapshot loader', () => {
     expect(snapshot?.operational.histories['24h'].points.length).toBeGreaterThan(50);
     expect(snapshot?.operational.histories['7d'].points.length).toBeGreaterThan(100);
     expect(snapshot?.operational.histories['30d'].points.length).toBeGreaterThan(50);
+    const temperatures = snapshot?.operational.histories['30d'].points.map(
+      (point) => point.temperature,
+    ) ?? [];
+
+    expect(Math.min(...temperatures)).toBeGreaterThanOrEqual(-2);
+    expect(Math.max(...temperatures)).toBeLessThanOrEqual(2);
     expect(snapshot?.business.consumption.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ sensor: 'fase1' }),

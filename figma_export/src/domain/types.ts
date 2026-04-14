@@ -219,7 +219,7 @@ export interface Alert {
   variable: string;
   message: string;
   value: number;
-  expected: number;
+  expected: number | string;
 }
 
 export interface TariffConfig {
@@ -230,9 +230,9 @@ export interface TariffConfig {
 }
 
 export interface ThresholdConfig {
-  temperatureCritical: number;
-  temperatureWarningHigh: number;
-  temperatureWarningLow: number;
+  temperatureTarget: number;
+  temperatureIdealMin: number;
+  temperatureIdealMax: number;
   freezerEnergyWarning: number;
   occupancyWarning: number;
   occupancyCritical: number;

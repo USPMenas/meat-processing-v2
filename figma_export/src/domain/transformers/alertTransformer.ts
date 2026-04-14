@@ -1,6 +1,20 @@
 import type { Alert, ThresholdConfig } from '../types';
 import { round } from './deterministic';
 
+function formatTemperature(value: number): string {
+  if (value > 0) {
+    return `+${round(value)}°C`;
+  }
+
+  return `${round(value)}°C`;
+}
+
+function buildTemperatureExpectation(thresholds: ThresholdConfig): string {
+  return `${formatTemperature(thresholds.temperatureTarget)} (faixa ideal: ${formatTemperature(
+    thresholds.temperatureIdealMin,
+  )} a ${formatTemperature(thresholds.temperatureIdealMax)})`;
+}
+
 export function checkAlerts(
   data: {
     temperature: number;
@@ -13,29 +27,21 @@ export function checkAlerts(
 ): Alert[] {
   const alerts: Alert[] = [];
 
-  if (data.temperature >= thresholds.temperatureCritical) {
-    alerts.push({
-      type: 'critical',
-      variable: 'Temperatura',
-      message: 'Temperatura acima do limite critico',
-      value: round(data.temperature),
-      expected: thresholds.temperatureCritical,
-    });
-  } else if (data.temperature >= thresholds.temperatureWarningHigh) {
+  if (data.temperature > thresholds.temperatureIdealMax) {
     alerts.push({
       type: 'warning',
       variable: 'Temperatura',
       message: 'Temperatura acima da faixa ideal',
       value: round(data.temperature),
-      expected: thresholds.temperatureWarningHigh,
+      expected: buildTemperatureExpectation(thresholds),
     });
-  } else if (data.temperature <= thresholds.temperatureWarningLow) {
+  } else if (data.temperature < thresholds.temperatureIdealMin) {
     alerts.push({
       type: 'warning',
       variable: 'Temperatura',
       message: 'Temperatura abaixo da faixa ideal',
       value: round(data.temperature),
-      expected: thresholds.temperatureWarningLow,
+      expected: buildTemperatureExpectation(thresholds),
     });
   }
 

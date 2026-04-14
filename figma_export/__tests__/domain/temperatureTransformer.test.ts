@@ -35,6 +35,10 @@ describe('temperatureTransformer', () => {
     expect(deriveTemperature(15, { ...DEFAULT_TEMPERATURE_CONFIG })).toBe(2);
   });
 
+  it('clamps derived temperature to the configured lower bound', () => {
+    expect(deriveTemperature(0, { ...DEFAULT_TEMPERATURE_CONFIG })).toBe(-2);
+  });
+
   it('builds a deterministic temperature time series', () => {
     expect(getTemperatureTimeSeries(measurements, { ...DEFAULT_TEMPERATURE_CONFIG })).toEqual([
       {

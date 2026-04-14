@@ -97,6 +97,30 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
+async function readJsonResponse<T>(response: Response, endpoint: string): Promise<T> {
+  const contentType = response.headers.get('content-type') ?? 'unknown';
+  const bodyText = await response.text();
+
+  if (bodyText.length === 0) {
+    throw new ApiError(
+      `Expected JSON response but received an empty body (status ${response.status}, content-type: ${contentType})`,
+      endpoint,
+      response.status,
+    );
+  }
+
+  try {
+    return JSON.parse(bodyText) as T;
+  } catch {
+    const preview = bodyText.replace(/\s+/g, ' ').trim().slice(0, 80);
+    throw new ApiError(
+      `Expected JSON response but received ${contentType} (status ${response.status})${preview ? `: ${preview}` : ''}`,
+      endpoint,
+      response.status,
+    );
+  }
+}
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -142,7 +166,7 @@ export class ApiClient {
           throw new ApiError(await readErrorMessage(response), endpoint, response.status);
         }
 
-        return (await response.json()) as T;
+        return await readJsonResponse<T>(response, endpoint);
       } catch (error) {
         const apiError = this.toApiError(error, endpoint);
         console.error(`[ApiClient] GET ${endpoint} failed on attempt ${attempt + 1}`, apiError);

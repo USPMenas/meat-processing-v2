@@ -10,7 +10,7 @@ export const DEFAULT_TEMPERATURE_CONFIG: Readonly<TemperatureConfig> = Object.fr
   avgPower: 7.95,
   sensitivityFactor: 2.5 / (10 - 5.36),
   noiseAmplitude: 0,
-  minTemperature: -5,
+  minTemperature: -2,
   maxTemperature: 2,
   sourceSensorIds: ['fase3'],
 });

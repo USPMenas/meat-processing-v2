@@ -1,9 +1,9 @@
 import type { ThresholdConfig } from '../types';
 
 export const DEFAULT_THRESHOLD_CONFIG: Readonly<ThresholdConfig> = Object.freeze({
-  temperatureCritical: -0,
-  temperatureWarningHigh: 2,
-  temperatureWarningLow: -5,
+  temperatureTarget: 0,
+  temperatureIdealMin: -2,
+  temperatureIdealMax: 2,
   freezerEnergyWarning: 18,
   occupancyWarning: 85,
   occupancyCritical: 95,

@@ -37,7 +37,7 @@ export function generateRealtimeData(): RealtimeData[] {
         15 + Math.random() * 3 + Math.sin(i / 10) * 2,
       equipmentEnergy:
         8 + Math.random() * 2 + Math.cos(i / 15) * 1,
-      temperature: -18 + Math.random() * 2 - 1,
+      temperature: Math.max(-2, Math.min(2, Math.random() * 1.8 - 0.9)),
       occupancy: 65 + Math.random() * 10 + Math.sin(i / 20) * 5,
     });
   }
@@ -64,7 +64,7 @@ export function generatePrediction(): RealtimeData[] {
         16 + Math.random() * 2 + Math.sin(i / 12) * 1.5,
       equipmentEnergy:
         9 + Math.random() * 1.5 + Math.cos(i / 18) * 0.8,
-      temperature: -18.5 + Math.random() * 1.5 - 0.75,
+      temperature: Math.max(-2, Math.min(2, 0.2 + Math.random() * 1.2 - 0.6)),
       occupancy: 70 + Math.random() * 8 + Math.sin(i / 25) * 4,
     });
   }
@@ -91,7 +91,7 @@ export function generateHistoricalData(): RealtimeData[] {
         (isBusinessHours ? 18 : 14) + Math.random() * 3,
       equipmentEnergy:
         (isBusinessHours ? 10 : 6) + Math.random() * 2,
-      temperature: -18 + Math.random() * 2 - 1,
+      temperature: Math.max(-2, Math.min(2, (isBusinessHours ? 0.4 : -0.3) + Math.random() - 0.5)),
       occupancy:
         (isBusinessHours ? 75 : 60) + Math.random() * 10,
     });
@@ -203,28 +203,28 @@ export interface Alert {
   variable: string;
   message: string;
   value: number;
-  expected: number;
+  expected: number | string;
 }
 
 export function checkAlerts(current: RealtimeData): Alert[] {
   const alerts: Alert[] = [];
 
   // Temperatura fora do esperado
-  if (current.temperature > -16) {
-    alerts.push({
-      type: "critical",
-      variable: "Temperatura",
-      message: "Temperatura acima do ideal",
-      value: current.temperature,
-      expected: -18,
-    });
-  } else if (current.temperature < -20) {
+  if (current.temperature > 2) {
     alerts.push({
       type: "warning",
       variable: "Temperatura",
-      message: "Temperatura abaixo do ideal",
+      message: "Temperatura acima da faixa ideal",
       value: current.temperature,
-      expected: -18,
+      expected: "0°C (faixa ideal: -2°C a +2°C)",
+    });
+  } else if (current.temperature < -2) {
+    alerts.push({
+      type: "warning",
+      variable: "Temperatura",
+      message: "Temperatura abaixo da faixa ideal",
+      value: current.temperature,
+      expected: "0°C (faixa ideal: -2°C a +2°C)",
     });
   }
 

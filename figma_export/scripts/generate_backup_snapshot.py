@@ -23,7 +23,7 @@ TEMPERATURE_CONFIG = {
     "baseTemperature": 0.0,
     "avgPower": 7.95,
     "sensitivityFactor": 2.5 / (10.0 - 5.36),
-    "minTemperature": -5.0,
+    "minTemperature": -2.0,
     "maxTemperature": 2.0,
 }
 OCCUPANCY_CONFIG = {

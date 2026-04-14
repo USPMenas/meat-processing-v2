@@ -5,7 +5,7 @@ export const RETRY_DELAYS_MS = Object.freeze([1_000, 2_000, 4_000]);
 export const RETRY_ATTEMPTS = RETRY_DELAYS_MS.length;
 export const POLLING_INTERVAL_MS = 60_000;
 export const DEGRADED_POLLING_INTERVAL_MS = 5 * 60_000;
-export const CACHE_VERSION = '1.1';
+export const CACHE_VERSION = '1.2';
 export const COLD_START_MONTHS = 3;
 export const STALE_FALLBACK_RECHECK_MS = 15 * 60 * 1_000;
 // Discovery still probes day-based windows so we do not multiply startup traffic.

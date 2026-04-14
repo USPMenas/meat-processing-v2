@@ -7,24 +7,42 @@ const HOP_BY_HOP_HEADERS = new Set([
   'transfer-encoding',
 ]);
 
-function getForwardPath(pathParam) {
-  if (Array.isArray(pathParam)) {
-    return pathParam.join('/');
+export function getForwardPath(pathParam) {
+  const pathValue = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
+
+  if (typeof pathValue !== 'string') {
+    return '';
   }
 
-  if (typeof pathParam === 'string') {
-    return pathParam;
-  }
-
-  return '';
+  return pathValue
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+    .join('/');
 }
 
-function getTargetUrl(req) {
-  const targetUrl = new URL(`${UPSTREAM_BASE_URL}/${getForwardPath(req.query.path)}`);
-  const originalUrl = new URL(req.url, 'https://proxy.local');
+export function buildTargetUrl(query = {}) {
+  const forwardPath = getForwardPath(query.path);
 
-  originalUrl.searchParams.forEach((value, key) => {
-    targetUrl.searchParams.append(key, value);
+  if (!forwardPath) {
+    return null;
+  }
+
+  const targetUrl = new URL(`${UPSTREAM_BASE_URL}/${forwardPath}`);
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (key === 'path' || value === undefined) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        targetUrl.searchParams.append(key, String(entry));
+      });
+      return;
+    }
+
+    targetUrl.searchParams.append(key, String(value));
   });
 
   return targetUrl;
@@ -71,8 +89,17 @@ function buildForwardHeaders(headers) {
 }
 
 export default async function handler(req, res) {
+  const targetUrl = buildTargetUrl(req.query ?? {});
+
+  if (!targetUrl) {
+    res.status(400).json({
+      detail: 'Missing proxy path.',
+    });
+    return;
+  }
+
   try {
-    const upstreamResponse = await fetch(getTargetUrl(req), {
+    const upstreamResponse = await fetch(targetUrl, {
       method: req.method,
       headers: buildForwardHeaders(req.headers),
       body: await readRequestBody(req),

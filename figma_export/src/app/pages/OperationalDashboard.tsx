@@ -404,14 +404,10 @@ export default function OperationalDashboard() {
               unit="°C"
               icon={Thermometer}
               status={
-                currentData.temperature >= DEFAULT_THRESHOLD_CONFIG.temperatureCritical
-                  ? 'critical'
-                  : currentData.temperature >=
-                        DEFAULT_THRESHOLD_CONFIG.temperatureWarningHigh ||
-                      currentData.temperature <=
-                        DEFAULT_THRESHOLD_CONFIG.temperatureWarningLow
-                    ? 'warning'
-                    : 'normal'
+                currentData.temperature > DEFAULT_THRESHOLD_CONFIG.temperatureIdealMax ||
+                currentData.temperature < DEFAULT_THRESHOLD_CONFIG.temperatureIdealMin
+                  ? 'warning'
+                  : 'normal'
               }
               subtitle={`Temperatura derivada em ${currentPeriodLabel.toLowerCase()}`}
               miniChartData={chartSeries}
@@ -425,7 +421,7 @@ export default function OperationalDashboard() {
                   formula="Temperatura estimada = baseTemperature + (activePower - avgPower) x sensitivityFactor."
                   details={[
                     'A calibracao atual usa o sensor fase3 como referencia energetica do congelador.',
-                    'O resultado e limitado a uma faixa operacional realista para nao gerar valores irreais.',
+                    'O alvo operacional e 0°C, com faixa ideal entre -2°C e +2°C.',
                     'Este numero e derivado, nao e uma medicao direta de temperatura vinda da API.',
                   ]}
                 />

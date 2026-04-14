@@ -16,8 +16,8 @@ function deriveTemperatureWithSeed(
   seed: string | number,
 ): number {
   const noise = deterministicNoise(seed, config.noiseAmplitude);
-  const minTemperature = config.minTemperature ?? -25;
-  const maxTemperature = config.maxTemperature ?? -10;
+  const minTemperature = config.minTemperature ?? -2;
+  const maxTemperature = config.maxTemperature ?? 2;
   const derivedTemperature =
     config.baseTemperature +
     (activePower - config.avgPower) * config.sensitivityFactor +

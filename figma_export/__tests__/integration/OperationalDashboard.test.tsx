@@ -34,7 +34,7 @@ describe('OperationalDashboard integration', () => {
       data: {
         freezerEnergy: 15,
         equipmentEnergy: 5,
-        temperature: -14,
+        temperature: 2.3,
         occupancy: 86.7,
         timestamp: new Date('2026-03-31T11:40:56.000Z'),
       },
@@ -42,7 +42,7 @@ describe('OperationalDashboard integration', () => {
         {
           freezerEnergy: 15,
           equipmentEnergy: 5,
-          temperature: -14,
+          temperature: 2.3,
           occupancy: 86.7,
           timestamp: new Date('2026-03-31T11:40:56.000Z'),
         },
@@ -50,11 +50,11 @@ describe('OperationalDashboard integration', () => {
       prediction: [],
       alerts: [
         {
-          type: 'critical',
+          type: 'warning',
           variable: 'Temperatura',
-          message: 'Temperatura acima do limite critico',
-          value: -14,
-          expected: -15,
+          message: 'Temperatura acima da faixa ideal',
+          value: 2.3,
+          expected: '0°C (faixa ideal: -2°C a +2°C)',
         },
       ],
       isLoading: false,
@@ -65,14 +65,14 @@ describe('OperationalDashboard integration', () => {
         {
           freezerEnergy: 12,
           equipmentEnergy: 4,
-          temperature: -18,
+          temperature: -1.8,
           occupancy: 70,
           timestamp: new Date('2026-03-30T11:40:56.000Z'),
         },
         {
           freezerEnergy: 15,
           equipmentEnergy: 5,
-          temperature: -14,
+          temperature: 2.3,
           occupancy: 86.7,
           timestamp: new Date('2026-03-31T11:40:56.000Z'),
         },
@@ -98,7 +98,7 @@ describe('OperationalDashboard integration', () => {
     expect(screen.getByText('15.0')).toBeInTheDocument();
     expect(screen.getByText('5.0')).toBeInTheDocument();
     expect(screen.getByText('86.7')).toBeInTheDocument();
-    expect(screen.getByText(/Temperatura acima do limite critico/i)).toBeInTheDocument();
+    expect(screen.getByText(/Temperatura acima da faixa ideal/i)).toBeInTheDocument();
     expect(screen.getByText(/Ultima tentativa na API/i)).toBeInTheDocument();
     expect(screen.getByText(/Ultimo dado exibido/i)).toBeInTheDocument();
     const lastMeasurementCard = screen.getByText(/Ultimo dado exibido/i).closest('div');

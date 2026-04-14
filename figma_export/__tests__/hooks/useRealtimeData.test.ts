@@ -87,7 +87,8 @@ describe('useRealtimeData', () => {
     expect(result.current.data?.temperature).toBe(2);
     expect(result.current.isStale).toBe(false);
     expect(result.current.alerts.map((alert) => alert.variable)).toEqual(
-      expect.arrayContaining(['Temperatura', 'Energia do Congelador', 'Ocupacao']),
+      expect.arrayContaining(['Energia do Congelador', 'Ocupacao']),
     );
+    expect(result.current.alerts.map((alert) => alert.variable)).not.toContain('Temperatura');
   });
 });

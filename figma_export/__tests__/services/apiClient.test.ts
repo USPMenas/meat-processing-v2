@@ -113,6 +113,31 @@ describe('ApiClient', () => {
     });
   });
 
+  it('does not retry when a 200 response contains HTML instead of JSON', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response('<!DOCTYPE html><html><body>swagger</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }),
+    );
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const client = new ApiClient({
+      baseUrl: '/api',
+      fetchFn,
+      sleep,
+      retryDelaysMs: [1000, 2000],
+    });
+
+    await expect(client.get('/lab')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 200,
+      endpoint: '/lab',
+      message: expect.stringContaining('text/html; charset=utf-8'),
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it('retries with exponential backoff and eventually succeeds', async () => {
     const fetchFn = vi
       .fn()
