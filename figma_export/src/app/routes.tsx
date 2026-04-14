@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router';
 import OperationalDashboard from './pages/OperationalDashboard';
 import LogisticsDashboard from './pages/LogisticsDashboard';
 import BusinessDashboard from './pages/BusinessDashboard';
+import DecisionDashboard from './pages/DecisionDashboard';
 
 export const router = createBrowserRouter([
   {
@@ -15,5 +16,9 @@ export const router = createBrowserRouter([
   {
     path: '/business',
     Component: BusinessDashboard,
+  },
+  {
+    path: '/decision',
+    Component: DecisionDashboard,
   },
 ]);

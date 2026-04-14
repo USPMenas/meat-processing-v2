@@ -14,6 +14,7 @@ describe('DashboardLayout', () => {
 
     expect(screen.getByText(/Frigorifico - Monitoramento/i)).toBeInTheDocument();
     expect(screen.getByText(/Dashboard de Logistica/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Decisao/i })).toBeInTheDocument();
 
     const navigation = screen.getByRole('navigation');
     expect(navigation.className).toContain('overflow-x-auto');

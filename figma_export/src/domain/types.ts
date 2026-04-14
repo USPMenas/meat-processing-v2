@@ -6,6 +6,7 @@ import type {
   ElectricalHealthResponse,
   HourlyProfileResponse,
 } from '../services/api/types';
+import type { MeasurementDataSource } from '../services/cache/types';
 
 export type { ApiMeasurement } from '../services/api/types';
 
@@ -210,6 +211,71 @@ export interface BusinessData {
   hourlyAverages: HourlyAvgEntry[];
   cumulativeData: CumulativeEntry[];
   referenceDate: Date | null;
+}
+
+export type DecisionActionId =
+  | 'operate_now'
+  | 'delay_to_ideal_window'
+  | 'redistribute_load'
+  | 'schedule_maintenance';
+
+export type DecisionRecommendation = 'recommended' | 'watch' | 'avoid';
+
+export type DecisionRiskLevel = 'low' | 'medium' | 'high';
+
+export interface DecisionCriterionScore {
+  criterion: string;
+  score: number;
+  weight: number;
+  weightedScore: number;
+  rationale: string;
+}
+
+export interface DecisionMatrixRow {
+  action: DecisionActionId;
+  label: string;
+  scores: DecisionCriterionScore[];
+  totalScore: number;
+  recommendation: DecisionRecommendation;
+  rationale: string;
+}
+
+export interface DecisionMatrixSummary {
+  currentRiskLevel: DecisionRiskLevel;
+  recommendedAction: DecisionActionId | null;
+  secondaryAction: DecisionActionId | null;
+  rows: DecisionMatrixRow[];
+  executiveMessage: string;
+  reviewCondition: string;
+  priorityBadges: string[];
+}
+
+export interface DecisionSourceStatus {
+  isOnline: boolean;
+  isUsingBackup: boolean;
+  dataSource: MeasurementDataSource;
+}
+
+export interface DecisionSignals {
+  temperature: number | null;
+  occupancy: number | null;
+  freezerEnergy: number | null;
+  peakOccupancy: number;
+  criticalAlerts: number;
+  warningAlerts: number;
+  infoAlerts: number;
+  isStale: boolean;
+  currentTariff: number;
+  nextIdealHour: number | null;
+  lowEnergyHours: number;
+  energyCost: number;
+  projectedEnergyCost: number;
+  margin: number;
+  energyCostShare: number;
+  isOnline: boolean;
+  isUsingBackup: boolean;
+  dataSource: MeasurementDataSource;
+  lastUpdatedAt: Date | null;
 }
 
 export type AlertType = 'warning' | 'critical' | 'info';

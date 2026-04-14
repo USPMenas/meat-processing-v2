@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
   LayoutDashboard,
+  Scale,
   Snowflake,
   Thermometer,
   TrendingUp,
@@ -9,7 +10,7 @@ import {
 
 interface DashboardLayoutProps {
   children: ReactNode;
-  variant?: 'operational' | 'logistics' | 'business';
+  variant?: 'operational' | 'logistics' | 'business' | 'decision';
 }
 
 export function DashboardLayout({
@@ -22,15 +23,19 @@ export function DashboardLayout({
     { path: '/', label: 'Operacional', icon: LayoutDashboard },
     { path: '/logistics', label: 'Logistica', icon: Thermometer },
     { path: '/business', label: 'Negocios', icon: TrendingUp },
+    { path: '/decision', label: 'Decisao', icon: Scale },
   ];
 
   const isBusinessVariant = variant === 'business';
+  const isDecisionVariant = variant === 'decision';
 
   return (
     <div
       className={`min-h-screen ${
         isBusinessVariant
           ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100'
+          : isDecisionVariant
+            ? 'bg-gradient-to-br from-amber-50 via-white to-slate-100'
           : 'bg-gray-50'
       }`}
     >
@@ -38,6 +43,8 @@ export function DashboardLayout({
         className={`border-b ${
           isBusinessVariant
             ? 'border-blue-200 bg-white/90 shadow-sm backdrop-blur-md'
+            : isDecisionVariant
+              ? 'border-amber-200 bg-white/90 shadow-sm backdrop-blur-md'
             : 'border-gray-200 bg-white'
         }`}
       >
@@ -60,6 +67,7 @@ export function DashboardLayout({
                   {variant === 'operational' && 'Dashboard Operacional'}
                   {variant === 'logistics' && 'Dashboard de Logistica'}
                   {variant === 'business' && 'Dashboard Executivo'}
+                  {variant === 'decision' && 'Sala de Decisao'}
                 </p>
               </div>
             </div>
@@ -70,6 +78,7 @@ export function DashboardLayout({
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
                   const isBusinessNav = item.path === '/business';
+                  const isDecisionNav = item.path === '/decision';
 
                   return (
                     <Link
@@ -79,9 +88,13 @@ export function DashboardLayout({
                         isActive
                           ? isBusinessNav
                             ? 'bg-blue-600 text-white shadow-sm'
+                            : isDecisionNav
+                              ? 'bg-amber-600 text-white shadow-sm'
                             : 'bg-blue-500 text-white shadow-sm'
                           : isBusinessNav
                             ? 'border border-blue-100 text-gray-600 hover:bg-blue-50'
+                            : isDecisionNav
+                              ? 'border border-amber-100 text-gray-600 hover:bg-amber-50'
                             : 'border border-gray-200 text-gray-600 hover:bg-gray-100'
                       }`}
                     >
